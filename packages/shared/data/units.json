@@ -1,0 +1,661 @@
+{
+  "unitCount": 19,
+  "commanderIndex": 9,
+  "skeletonIndex": 10,
+  "crystalIndex": 11,
+  "units": [
+    {
+      "index": 0,
+      "price": 150,
+      "occupancy": 1,
+      "maxHp": 100,
+      "attack": 50,
+      "attackType": 0,
+      "physicalDefence": 5,
+      "magicDefence": 5,
+      "movementPoint": 4,
+      "abilities": [
+        {
+          "id": 0,
+          "name": "CONQUEROR"
+        },
+        {
+          "id": 10,
+          "name": "REPAIRER"
+        }
+      ],
+      "growth": {
+        "hp": 0,
+        "attack": 10,
+        "physicalDefence": 5,
+        "magicDefence": 5,
+        "movement": 0
+      },
+      "minAttackRange": 1,
+      "maxAttackRange": 1,
+      "isCommander": false,
+      "isSkeleton": false,
+      "isCrystal": false
+    },
+    {
+      "index": 1,
+      "price": 250,
+      "occupancy": 1,
+      "maxHp": 100,
+      "attack": 45,
+      "attackType": 0,
+      "physicalDefence": 5,
+      "magicDefence": 5,
+      "movementPoint": 4,
+      "abilities": [
+        {
+          "id": 12,
+          "name": "MARKSMAN"
+        }
+      ],
+      "growth": {
+        "hp": 0,
+        "attack": 10,
+        "physicalDefence": 5,
+        "magicDefence": 5,
+        "movement": 0
+      },
+      "minAttackRange": 2,
+      "maxAttackRange": 3,
+      "isCommander": false,
+      "isSkeleton": false,
+      "isCrystal": false
+    },
+    {
+      "index": 2,
+      "price": 300,
+      "occupancy": 1,
+      "maxHp": 100,
+      "attack": 60,
+      "attackType": 0,
+      "physicalDefence": 10,
+      "magicDefence": 10,
+      "movementPoint": 4,
+      "abilities": [
+        {
+          "id": 1,
+          "name": "FIGHTER_OF_THE_SEA"
+        },
+        {
+          "id": 13,
+          "name": "SON_OF_THE_SEA"
+        }
+      ],
+      "growth": {
+        "hp": 0,
+        "attack": 10,
+        "physicalDefence": 5,
+        "magicDefence": 5,
+        "movement": 0
+      },
+      "minAttackRange": 1,
+      "maxAttackRange": 1,
+      "isCommander": false,
+      "isSkeleton": false,
+      "isCrystal": false
+    },
+    {
+      "index": 3,
+      "price": 400,
+      "occupancy": 2,
+      "maxHp": 100,
+      "attack": 45,
+      "attackType": 1,
+      "physicalDefence": 0,
+      "magicDefence": 40,
+      "movementPoint": 4,
+      "abilities": [
+        {
+          "id": 6,
+          "name": "NECROMANCER"
+        }
+      ],
+      "growth": {
+        "hp": 0,
+        "attack": 10,
+        "physicalDefence": 5,
+        "magicDefence": 5,
+        "movement": 0
+      },
+      "minAttackRange": 1,
+      "maxAttackRange": 2,
+      "isCommander": false,
+      "isSkeleton": false,
+      "isCrystal": false
+    },
+    {
+      "index": 4,
+      "price": 500,
+      "occupancy": 2,
+      "maxHp": 100,
+      "attack": 50,
+      "attackType": 1,
+      "physicalDefence": 15,
+      "magicDefence": 30,
+      "movementPoint": 4,
+      "abilities": [
+        {
+          "id": 5,
+          "name": "AIR_FORCE"
+        },
+        {
+          "id": 2,
+          "name": "FIGHTER_OF_THE_FOREST"
+        },
+        {
+          "id": 14,
+          "name": "SON_OF_THE_FOREST"
+        },
+        {
+          "id": 23,
+          "name": "REFRESH_AURA"
+        }
+      ],
+      "growth": {
+        "hp": 0,
+        "attack": 5,
+        "physicalDefence": 5,
+        "magicDefence": 5,
+        "movement": 0
+      },
+      "minAttackRange": 1,
+      "maxAttackRange": 2,
+      "isCommander": false,
+      "isSkeleton": false,
+      "isCrystal": false
+    },
+    {
+      "index": 5,
+      "price": 600,
+      "occupancy": 3,
+      "maxHp": 100,
+      "attack": 70,
+      "attackType": 0,
+      "physicalDefence": 20,
+      "magicDefence": 5,
+      "movementPoint": 6,
+      "abilities": [
+        {
+          "id": 8,
+          "name": "CHARGER"
+        },
+        {
+          "id": 9,
+          "name": "POISONER"
+        },
+        {
+          "id": 16,
+          "name": "CRAWLER"
+        }
+      ],
+      "growth": {
+        "hp": 0,
+        "attack": 10,
+        "physicalDefence": 5,
+        "magicDefence": 5,
+        "movement": 0
+      },
+      "minAttackRange": 1,
+      "maxAttackRange": 1,
+      "isCommander": false,
+      "isSkeleton": false,
+      "isCrystal": false
+    },
+    {
+      "index": 6,
+      "price": 600,
+      "occupancy": 3,
+      "maxHp": 100,
+      "attack": 55,
+      "attackType": 0,
+      "physicalDefence": 40,
+      "magicDefence": 10,
+      "movementPoint": 4,
+      "abilities": [
+        {
+          "id": 3,
+          "name": "FIGHTER_OF_THE_MOUNTAIN"
+        },
+        {
+          "id": 15,
+          "name": "SON_OF_THE_MOUNTAIN"
+        },
+        {
+          "id": 17,
+          "name": "SLOWING_AURA"
+        }
+      ],
+      "growth": {
+        "hp": 25,
+        "attack": 5,
+        "physicalDefence": 5,
+        "magicDefence": 5,
+        "movement": 0
+      },
+      "minAttackRange": 1,
+      "maxAttackRange": 1,
+      "isCommander": false,
+      "isSkeleton": false,
+      "isCrystal": false
+    },
+    {
+      "index": 7,
+      "price": 800,
+      "occupancy": 4,
+      "maxHp": 100,
+      "attack": 65,
+      "attackType": 0,
+      "physicalDefence": 5,
+      "magicDefence": 5,
+      "movementPoint": 3,
+      "abilities": [
+        {
+          "id": 4,
+          "name": "DESTROYER"
+        },
+        {
+          "id": 19,
+          "name": "HEAVY_MACHINE"
+        }
+      ],
+      "growth": {
+        "hp": 0,
+        "attack": 10,
+        "physicalDefence": 5,
+        "magicDefence": 5,
+        "movement": 0
+      },
+      "minAttackRange": 3,
+      "maxAttackRange": 7,
+      "isCommander": false,
+      "isSkeleton": false,
+      "isCrystal": false
+    },
+    {
+      "index": 8,
+      "price": 1000,
+      "occupancy": 5,
+      "maxHp": 100,
+      "attack": 70,
+      "attackType": 1,
+      "physicalDefence": 25,
+      "magicDefence": 25,
+      "movementPoint": 6,
+      "abilities": [
+        {
+          "id": 5,
+          "name": "AIR_FORCE"
+        },
+        {
+          "id": 8,
+          "name": "CHARGER"
+        },
+        {
+          "id": 24,
+          "name": "LORD_OF_TERROR"
+        },
+        {
+          "id": 28,
+          "name": "HARD_SKIN"
+        }
+      ],
+      "growth": {
+        "hp": 0,
+        "attack": 10,
+        "physicalDefence": 5,
+        "magicDefence": 5,
+        "movement": 0
+      },
+      "minAttackRange": 1,
+      "maxAttackRange": 2,
+      "isCommander": false,
+      "isSkeleton": false,
+      "isCrystal": false
+    },
+    {
+      "index": 9,
+      "price": 400,
+      "occupancy": 1,
+      "maxHp": 100,
+      "attack": 60,
+      "attackType": 0,
+      "physicalDefence": 20,
+      "magicDefence": 20,
+      "movementPoint": 4,
+      "abilities": [
+        {
+          "id": 0,
+          "name": "CONQUEROR"
+        },
+        {
+          "id": 10,
+          "name": "REPAIRER"
+        },
+        {
+          "id": 18,
+          "name": "COMMANDER"
+        },
+        {
+          "id": 22,
+          "name": "GUARDIAN"
+        }
+      ],
+      "growth": {
+        "hp": 0,
+        "attack": 10,
+        "physicalDefence": 5,
+        "magicDefence": 5,
+        "movement": 1
+      },
+      "minAttackRange": 1,
+      "maxAttackRange": 1,
+      "isCommander": true,
+      "isSkeleton": false,
+      "isCrystal": false
+    },
+    {
+      "index": 10,
+      "price": 0,
+      "occupancy": 0,
+      "maxHp": 100,
+      "attack": 40,
+      "attackType": 0,
+      "physicalDefence": 5,
+      "magicDefence": 5,
+      "movementPoint": 3,
+      "abilities": [
+        {
+          "id": 9,
+          "name": "POISONER"
+        },
+        {
+          "id": 11,
+          "name": "UNDEAD"
+        }
+      ],
+      "growth": {
+        "hp": 0,
+        "attack": 10,
+        "physicalDefence": 5,
+        "magicDefence": 5,
+        "movement": 0
+      },
+      "minAttackRange": 1,
+      "maxAttackRange": 1,
+      "isCommander": false,
+      "isSkeleton": true,
+      "isCrystal": false
+    },
+    {
+      "index": 11,
+      "price": 0,
+      "occupancy": 1,
+      "maxHp": 100,
+      "attack": 0,
+      "attackType": 0,
+      "physicalDefence": 0,
+      "magicDefence": 0,
+      "movementPoint": 4,
+      "abilities": [],
+      "growth": {
+        "hp": 0,
+        "attack": 0,
+        "physicalDefence": 0,
+        "magicDefence": 0,
+        "movement": 0
+      },
+      "minAttackRange": 0,
+      "maxAttackRange": 0,
+      "isCommander": false,
+      "isSkeleton": false,
+      "isCrystal": true
+    },
+    {
+      "index": 12,
+      "price": 400,
+      "occupancy": 2,
+      "maxHp": 100,
+      "attack": 50,
+      "attackType": 0,
+      "physicalDefence": 10,
+      "magicDefence": 10,
+      "movementPoint": 4,
+      "abilities": [
+        {
+          "id": 0,
+          "name": "CONQUEROR"
+        },
+        {
+          "id": 7,
+          "name": "HEALER"
+        }
+      ],
+      "growth": {
+        "hp": 0,
+        "attack": 5,
+        "physicalDefence": 5,
+        "magicDefence": 5,
+        "movement": 0
+      },
+      "minAttackRange": 1,
+      "maxAttackRange": 1,
+      "isCommander": false,
+      "isSkeleton": false,
+      "isCrystal": false
+    },
+    {
+      "index": 13,
+      "price": 500,
+      "occupancy": 2,
+      "maxHp": 100,
+      "attack": 55,
+      "attackType": 0,
+      "physicalDefence": 15,
+      "magicDefence": 5,
+      "movementPoint": 4,
+      "abilities": [
+        {
+          "id": 16,
+          "name": "CRAWLER"
+        },
+        {
+          "id": 20,
+          "name": "ATTACK_AURA"
+        },
+        {
+          "id": 21,
+          "name": "BLOODTHIRSTY"
+        }
+      ],
+      "growth": {
+        "hp": 0,
+        "attack": 10,
+        "physicalDefence": 5,
+        "magicDefence": 5,
+        "movement": 0
+      },
+      "minAttackRange": 1,
+      "maxAttackRange": 1,
+      "isCommander": false,
+      "isSkeleton": false,
+      "isCrystal": false
+    },
+    {
+      "index": 14,
+      "price": 300,
+      "occupancy": 1,
+      "maxHp": 100,
+      "attack": 50,
+      "attackType": 1,
+      "physicalDefence": 10,
+      "magicDefence": 20,
+      "movementPoint": 4,
+      "abilities": [
+        {
+          "id": 5,
+          "name": "AIR_FORCE"
+        },
+        {
+          "id": 11,
+          "name": "UNDEAD"
+        },
+        {
+          "id": 26,
+          "name": "BLINDER"
+        }
+      ],
+      "growth": {
+        "hp": 0,
+        "attack": 10,
+        "physicalDefence": 5,
+        "magicDefence": 5,
+        "movement": 1
+      },
+      "minAttackRange": 1,
+      "maxAttackRange": 1,
+      "isCommander": false,
+      "isSkeleton": false,
+      "isCrystal": false
+    },
+    {
+      "index": 15,
+      "price": 400,
+      "occupancy": 2,
+      "maxHp": 100,
+      "attack": 60,
+      "attackType": 1,
+      "physicalDefence": 5,
+      "magicDefence": 30,
+      "movementPoint": 4,
+      "abilities": [],
+      "growth": {
+        "hp": 0,
+        "attack": 10,
+        "physicalDefence": 5,
+        "magicDefence": 5,
+        "movement": 0
+      },
+      "minAttackRange": 1,
+      "maxAttackRange": 2,
+      "isCommander": false,
+      "isSkeleton": false,
+      "isCrystal": false
+    },
+    {
+      "index": 16,
+      "price": 700,
+      "occupancy": 4,
+      "maxHp": 100,
+      "attack": 55,
+      "attackType": 0,
+      "physicalDefence": 10,
+      "magicDefence": 10,
+      "movementPoint": 6,
+      "abilities": [
+        {
+          "id": 8,
+          "name": "CHARGER"
+        },
+        {
+          "id": 12,
+          "name": "MARKSMAN"
+        },
+        {
+          "id": 16,
+          "name": "CRAWLER"
+        },
+        {
+          "id": 26,
+          "name": "BLINDER"
+        }
+      ],
+      "growth": {
+        "hp": 0,
+        "attack": 10,
+        "physicalDefence": 5,
+        "magicDefence": 5,
+        "movement": 0
+      },
+      "minAttackRange": 2,
+      "maxAttackRange": 3,
+      "isCommander": false,
+      "isSkeleton": false,
+      "isCrystal": false
+    },
+    {
+      "index": 17,
+      "price": 600,
+      "occupancy": 3,
+      "maxHp": 100,
+      "attack": 50,
+      "attackType": 1,
+      "physicalDefence": 15,
+      "magicDefence": 15,
+      "movementPoint": 4,
+      "abilities": [
+        {
+          "id": 1,
+          "name": "FIGHTER_OF_THE_SEA"
+        },
+        {
+          "id": 13,
+          "name": "SON_OF_THE_SEA"
+        },
+        {
+          "id": 27,
+          "name": "REHABILITATION"
+        }
+      ],
+      "growth": {
+        "hp": 10,
+        "attack": 10,
+        "physicalDefence": 5,
+        "magicDefence": 5,
+        "movement": 0
+      },
+      "minAttackRange": 1,
+      "maxAttackRange": 3,
+      "isCommander": false,
+      "isSkeleton": false,
+      "isCrystal": false
+    },
+    {
+      "index": 18,
+      "price": 250,
+      "occupancy": 1,
+      "maxHp": 100,
+      "attack": 45,
+      "attackType": 1,
+      "physicalDefence": 5,
+      "magicDefence": 5,
+      "movementPoint": 4,
+      "abilities": [
+        {
+          "id": 27,
+          "name": "REHABILITATION"
+        },
+        {
+          "id": 28,
+          "name": "HARD_SKIN"
+        }
+      ],
+      "growth": {
+        "hp": 0,
+        "attack": 5,
+        "physicalDefence": 5,
+        "magicDefence": 5,
+        "movement": 0
+      },
+      "minAttackRange": 1,
+      "maxAttackRange": 1,
+      "isCommander": false,
+      "isSkeleton": false,
+      "isCrystal": false
+    }
+  ]
+}

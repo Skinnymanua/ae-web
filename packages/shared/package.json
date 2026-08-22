@@ -1,0 +1,15 @@
+{
+  "name": "@ae/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./src/combat-resolution.js": "./src/combat-resolution.js",
+    "./src/game-state.js": "./src/game-state.js",
+    "./data/units.json": "./data/units.json",
+    "./data/tiles.json": "./data/tiles.json",
+    "./src/*": "./src/*"
+  }
+}
