@@ -4,7 +4,7 @@ import unitsData from "@ae/shared/data/units.json";
 import tilesData from "@ae/shared/data/tiles.json";
 import mapData from "../sample-map.json";
 
-import { drawTileGrid } from "../render/tiles.js";
+import { drawTileGrid, updateSelectedTileHighlight } from "../render/tiles.js";
 import { refreshUnits, animateUnits } from "../render/units.js";
 import { createHud } from "../ui/hud.js";
 import { createStatsPanel } from "../ui/statsPanel.js";
@@ -32,6 +32,16 @@ export class BoardScene extends Phaser.Scene {
     this.load.spritesheet("icons_hud_battle", "/images/icons_hud_battle.png", {
       frameWidth: 13,
       frameHeight: 16,
+    });
+        this.load.spritesheet("icons_hud_battle", "/images/icons_hud_battle.png", {
+      frameWidth: 13,
+      frameHeight: 16,
+    });
+    // Ported from android/assets/images/cursor_normal.png in project_aeii — the
+    // pink diamond selection cursor, 2 frames for CursorAnimator's 0.3s pulse.
+    this.load.spritesheet("cursor_normal", "/images/cursor_normal.png", {
+      frameWidth: 26,
+      frameHeight: 26,
     });
   }
 
@@ -61,6 +71,8 @@ export class BoardScene extends Phaser.Scene {
     this.animating = false;
     this.modalOpen = false;
     this.actionBarOpen = false;
+    this.actionBarUnitId = null;
+    this.actionOrigin = null;
     this.attackTargetMode = false;
     this._pendingAttacker = null;
     this.highlightRects = [];
@@ -75,8 +87,9 @@ export class BoardScene extends Phaser.Scene {
     createStatsPanel(this);
   }
 
-  update(time, delta) {
+    update(time, delta) {
     this.elapsedMs += delta;
     animateUnits(this, this.elapsedMs);
+    updateSelectedTileHighlight(this, this.elapsedMs);
   }
 }

@@ -23,6 +23,7 @@ export function clearActionBar(scene) {
     scene.actionBarContainer = null;
   }
   scene.actionBarOpen = false;
+  scene.actionBarUnitId = null;
 }
 
 /** Marks the unit's turn as done, closes the bar, and re-renders. */
@@ -30,6 +31,7 @@ export function finishUnitAction(scene, unit) {
   unit.standby = true;
   clearActionBar(scene);
   scene.selectedUnitId = null;
+  scene.actionOrigin = null;
   clearHighlights(scene);
   refreshUnits(scene);
   updateInfoText(scene);
@@ -54,7 +56,8 @@ export function enterAttackTargetMode(scene, unit, attackablePositions) {
 export function showActionBar(scene, unit, x, y) {
   clearActionBar(scene);
   scene.actionBarOpen = true;
-
+  scene.actionBarUnitId = unit.id;
+  
   const tile = scene.game_.getTileAt(x, y);
   const attackable = getAttackableEnemyPositions(scene, unit);
   const canOccupy = scene.game_.canOccupyTile(unit.id, x, y);

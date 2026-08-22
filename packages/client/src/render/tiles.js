@@ -47,3 +47,37 @@ export function highlightPositionSet(scene, positions, color = 0xffffff, alpha =
     addHighlight(scene, x, y, color, alpha);
   }
 }
+
+ /** Marks whichever unit's stats are currently shown — the same pink diamond selection
+ * cursor as the original (CursorAnimator / cursor_normal.png), pulsing between its two
+ * frames every 300ms via updateSelectedTileHighlight(). Tracked/cleared independently
+ * of the movement-range highlight. */
+export function highlightSelectedTile(scene, x, y) {
+  clearSelectedTileHighlight(scene);
+
+  // Original: size = ts * 26/24, centered — the cursor is slightly larger than
+  // the tile so it overflows the edges a bit, matching the reference screenshot.
+  const size = (TILE_SIZE * 26) / 24;
+  const cx = x * TILE_SIZE + TILE_SIZE / 2;
+  const cy = y * TILE_SIZE + TILE_SIZE / 2;
+
+  const sprite = scene.add.sprite(cx, cy, "cursor_normal", 0);
+  sprite.setDisplaySize(size, size);
+  scene.selectedTileHighlight = sprite;
+}
+
+/** Advances the selection cursor's pulse frame — same 300ms/frame convention as
+ * animateUnits(), matching the original's 0.3f CursorAnimator. Call from the scene's
+ * update() loop. */
+export function updateSelectedTileHighlight(scene, elapsedMs) {
+  if (!scene.selectedTileHighlight) return;
+  const frame = Math.floor(elapsedMs / 300) % 2;
+  scene.selectedTileHighlight.setFrame(frame);
+}
+
+export function clearSelectedTileHighlight(scene) {
+  if (scene.selectedTileHighlight) {
+    scene.selectedTileHighlight.destroy();
+    scene.selectedTileHighlight = null;
+  }
+}

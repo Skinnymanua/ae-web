@@ -1,6 +1,5 @@
 import { TILE_SIZE } from "../constants.js";
 import { getMaxHp } from "@ae/shared/src/combat-resolution.js";
-import { updateStatsPanel } from "../ui/statsPanel.js";
 
 const FRAMES_PER_ROW = 19; // unit count — matches ResourceManager's texture_size derivation
 
@@ -35,15 +34,13 @@ export function refreshUnits(scene) {
     sprite.setDisplaySize(TILE_SIZE, TILE_SIZE);
     sprite.setTint(unit.standby ? 0x888888 : 0xffffff);
     sprite.setData("unitIndex", unit.unitIndex);
-    sprite.setData("standby", unit.standby);
-    sprite.setInteractive();
-    sprite.on("pointerover", () => updateStatsPanel(scene, unit));
-    sprite.on("pointerout", () => {
-      const stillSelected = scene.selectedUnitId ? scene.game_.getUnit(scene.selectedUnitId) : null;
-      updateStatsPanel(scene, stillSelected);
-    });
+        sprite.setData("standby", unit.standby);
+    // Not interactive: unit sprites sit on top of their tile, and the tile's
+    // own pointerdown (drawTileGrid) handles selection/movement. Keeping units
+    // non-interactive avoids blocking that click — see boardInput.js for how
+    // the stats panel gets updated on selection instead of hover.
     scene.unitSprites[unit.id] = sprite;
-
+    
     if (unit.isCommander) {
       // Original draws heads in libGDX's Y-up coordinate space; Phaser/canvas is Y-down,
       // so the original's "+ ts/2" offset becomes "no offset" here (top half of the tile,
