@@ -5,6 +5,7 @@ import { highlightPositionSet, clearHighlights } from "../render/tiles.js";
 export function showConfirm(scene, message, onYes, onNo) {
   scene.modalOpen = true;
   const container = scene.add.container(150, 250);
+  container.setScrollFactor(0);
   const bg = scene.add.rectangle(0, 0, 260, 110, 0x000000, 0.9).setStrokeStyle(2, 0xffffff);
   const text = scene.add
     .text(0, -30, message, { fontSize: "14px", color: "#ffffff", wordWrap: { width: 230 }, align: "center" })
@@ -35,7 +36,8 @@ export function showBuyMenu(scene) {
   scene.modalOpen = true;
   const team = scene.game_.currentTeam;
   const container = scene.add.container(500, 200);
-
+  container.setScrollFactor(0);
+  
   const affordable = unitsData.units.filter((def) => scene.game_.canBuyUnit(def.index, team));
   const rowHeight = 20;
   const panelHeight = (affordable.length + 1) * rowHeight + 20;

@@ -1,29 +1,26 @@
-import { TILE_SIZE } from "../constants.js";
+import { TILE_SIZE, BOARD_OFFSET_Y } from "../constants.js";
 import { getMaxHp } from "@ae/shared/src/combat-resolution.js";
 
 const FRAMES_PER_ROW = 19; // unit count — matches ResourceManager's texture_size derivation
 
-function hpBarColor(fraction) {
-  if (fraction > 0.5) return 0x44dd44;
-  if (fraction > 0.25) return 0xdddd44;
-  return 0xdd4444;
-}
+// FontRenderer: schar_width/height = ts * 6/24, ts * 7/24 — scaled from a 24px-tile design.
+const SCHAR_WIDTH = (TILE_SIZE * 6) / 24;
+const SCHAR_HEIGHT = (TILE_SIZE * 7) / 24;
 
-/** Destroys and redraws every unit sprite (+ head overlay + HP bar) from current game_ state. */
+/** Destroys and redraws every unit sprite (+ head overlay + HP number) from current game_ state. */
 export function refreshUnits(scene) {
   for (const sprite of Object.values(scene.unitSprites)) sprite.destroy();
   for (const sprite of Object.values(scene.headSprites)) sprite.destroy();
-  for (const bar of Object.values(scene.hpBars ?? {})) {
-    bar.bg.destroy();
-    bar.fg.destroy();
+  for (const digits of Object.values(scene.hpDigitSprites ?? {})) {
+    for (const d of digits) d.destroy();
   }
   scene.unitSprites = {};
   scene.headSprites = {};
-  scene.hpBars = {};
+  scene.hpDigitSprites = {};
 
   for (const unit of scene.game_.units) {
     const topLeftX = unit.x * TILE_SIZE;
-    const topLeftY = unit.y * TILE_SIZE;
+    const topLeftY = unit.y * TILE_SIZE + BOARD_OFFSET_Y;
 
     const sprite = scene.add.sprite(
       topLeftX + TILE_SIZE / 2,
@@ -34,13 +31,13 @@ export function refreshUnits(scene) {
     sprite.setDisplaySize(TILE_SIZE, TILE_SIZE);
     sprite.setTint(unit.standby ? 0x888888 : 0xffffff);
     sprite.setData("unitIndex", unit.unitIndex);
-        sprite.setData("standby", unit.standby);
+    sprite.setData("standby", unit.standby);
     // Not interactive: unit sprites sit on top of their tile, and the tile's
     // own pointerdown (drawTileGrid) handles selection/movement. Keeping units
     // non-interactive avoids blocking that click — see boardInput.js for how
     // the stats panel gets updated on selection instead of hover.
     scene.unitSprites[unit.id] = sprite;
-    
+
     if (unit.isCommander) {
       // Original draws heads in libGDX's Y-up coordinate space; Phaser/canvas is Y-down,
       // so the original's "+ ts/2" offset becomes "no offset" here (top half of the tile,
@@ -52,16 +49,20 @@ export function refreshUnits(scene) {
       scene.headSprites[unit.id] = head;
     }
 
-    // HP bar — not in the original (which only shows HP in the side panel), but
-    // a small at-a-glance indicator is worth the extra draw calls for playability.
+    // Ported from CanvasRenderer#drawUnitWithInformation: only shown while damaged,
+    // digits drawn bottom-left of the tile via FontRenderer#drawSNumber.
     const maxHp = getMaxHp(unit);
-    const fraction = Math.max(unit.currentHp / maxHp, 0);
-    const barWidth = TILE_SIZE - 8;
-    const barY = topLeftY + TILE_SIZE - 6;
-    const barBg = scene.add.rectangle(topLeftX + TILE_SIZE / 2, barY, barWidth, 5, 0x000000, 0.6);
-    const barFg = scene.add.rectangle(topLeftX + 4, barY, barWidth * fraction, 5, hpBarColor(fraction));
-    barFg.setOrigin(0, 0.5);
-    scene.hpBars[unit.id] = { bg: barBg, fg: barFg };
+    scene.hpDigitSprites[unit.id] = [];
+    if (unit.currentHp !== maxHp) {
+      const digits = String(unit.currentHp).split("").map(Number);
+      const digitY = topLeftY + TILE_SIZE - SCHAR_HEIGHT;
+      digits.forEach((n, i) => {
+        const digitSprite = scene.add.sprite(topLeftX + i * SCHAR_WIDTH, digitY, "chars_small", n);
+        digitSprite.setOrigin(0, 0);
+        digitSprite.setDisplaySize(SCHAR_WIDTH, SCHAR_HEIGHT);
+        scene.hpDigitSprites[unit.id].push(digitSprite);
+      });
+    }
   }
 }
 
@@ -97,11 +98,11 @@ export function animateUnitMove(scene, unit, path, onComplete) {
       onComplete();
       return;
     }
-    const { x, y } = steps[i];
+        const { x, y } = steps[i];
     scene.tweens.add({
       targets: sprite,
       x: x * TILE_SIZE + TILE_SIZE / 2,
-      y: y * TILE_SIZE + TILE_SIZE / 2,
+      y: y * TILE_SIZE + TILE_SIZE / 2 + BOARD_OFFSET_Y,
       duration: stepDuration,
       onComplete: () => {
         i++;
@@ -112,7 +113,7 @@ export function animateUnitMove(scene, unit, path, onComplete) {
       scene.tweens.add({
         targets: head,
         x: x * TILE_SIZE + (TILE_SIZE * 7) / 24,
-        y: y * TILE_SIZE,
+        y: y * TILE_SIZE + BOARD_OFFSET_Y,
         duration: stepDuration,
       });
     }

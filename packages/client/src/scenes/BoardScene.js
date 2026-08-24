@@ -15,6 +15,11 @@ export class BoardScene extends Phaser.Scene {
     for (let i = 0; i < 89; i++) {
       this.load.image(`tile_${i}`, `/images/tiles/tile_${i}.png`);
     }
+    // Ported from android/assets/images/tiles/top_tiles/top_tile_0.png — the castle's
+    // tower/roof overlay, drawn on top of the tile *above* a castle base tile (see
+    // Tile#getTopTileIndex / GameScreen#drawMap in the original). Only index 0 exists
+    // in the source repo — every castle variant (team-owned or neutral) uses it.
+    this.load.image("top_tile_0", "/images/tiles/top_tiles/top_tile_0.png");
     for (let team = 0; team < 4; team++) {
       this.load.spritesheet(`unit_sheet_${team}`, `/images/units/unit_sheet_${team}.png`, {
         frameWidth: 24,
@@ -42,6 +47,30 @@ export class BoardScene extends Phaser.Scene {
     this.load.spritesheet("cursor_normal", "/images/cursor_normal.png", {
       frameWidth: 26,
       frameHeight: 26,
+    });
+        // Ported from android/assets/images/cursor_normal.png in project_aeii — the
+    // pink diamond selection cursor, 2 frames for CursorAnimator's 0.3s pulse.
+    this.load.spritesheet("cursor_normal", "/images/cursor_normal.png", {
+      frameWidth: 26,
+      frameHeight: 26,
+    });
+    // Ported from android/assets/images/chars_small.png — FontRenderer's small digit
+    // font (12 frames of 6x7; 0-9 are the digits, used for the bottom-left HP number).
+    this.load.spritesheet("chars_small", "/images/chars_small.png", {
+      frameWidth: 6,
+      frameHeight: 7,
+    });
+        // Ported from android/assets/images/chars_small.png — FontRenderer's small digit
+    // font (12 frames of 6x7; 0-9 are the digits, used for the bottom-left HP number).
+    this.load.spritesheet("chars_small", "/images/chars_small.png", {
+      frameWidth: 6,
+      frameHeight: 7,
+    });
+    // Ported from android/assets/images/icons_hud_status.png — StatusBarRenderer's
+    // population/gold icons (3 frames of 11x11: person, gold coin, shield-cross).
+    this.load.spritesheet("icons_hud_status", "/images/icons_hud_status.png", {
+      frameWidth: 11,
+      frameHeight: 11,
     });
   }
 

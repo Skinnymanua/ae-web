@@ -2,6 +2,7 @@ import { animateUnitMove, refreshUnits } from "../render/units.js";
 import { showActionBar, finishUnitAction, clearActionBar } from "../ui/actionBar.js";
 import { updateInfoText } from "../ui/hud.js";
 import { updateStatsPanel, refreshStatsPanel } from "../ui/statsPanel.js";
+import { updateBottomBarTile } from "../ui/bottomBar.js";
 import {
   clearHighlights,
   highlightPositionSet,
@@ -17,6 +18,8 @@ function selectUnitForStats(scene, unit) {
 
 export function onTileClick(scene, x, y) {
   if (scene.animating || scene.modalOpen) return;
+
+  updateBottomBarTile(scene, x, y);
 
   if (scene.attackTargetMode) {
     handleAttackTargetClick(scene, x, y);
@@ -48,12 +51,12 @@ export function onTileClick(scene, x, y) {
  * the board as "actually, let me reconsider" rather than requiring a dedicated
  * cancel button.
  */
-function handleActionBarCancelClick(scene) {
+export function handleActionBarCancelClick(scene) {
   const unit = scene.game_.getUnit(scene.actionBarUnitId);
   const origin = scene.actionOrigin;
   clearActionBar(scene);
   if (!unit || !origin) return;
-
+  
   const reselectForMove = () => {
     unit.currentMovementPoint = origin.movementPoint;
     scene.selectedUnitId = unit.id;
@@ -116,7 +119,14 @@ function handleBuyPlacementClick(scene, x, y) {
 
 function handleUnitSelectionClick(scene, x, y) {
   const clickedUnit = scene.game_.getUnitAt(x, y);
-  if (!clickedUnit) return;
+  if (!clickedUnit) {
+    // Clicked empty ground with nothing in movement-selection mode — this is how
+    // an enemy/standby unit's threat-range preview (below) gets dismissed, since
+    // that path never sets scene.selectedUnitId for handleActingUnitClick to catch.
+    clearHighlights(scene);
+    clearSelectedTileHighlight(scene);
+    return;
+  }
 
   const canAct = clickedUnit.team === scene.game_.currentTeam && !clickedUnit.standby;
 
@@ -124,11 +134,16 @@ function handleUnitSelectionClick(scene, x, y) {
     // Enemy unit, or one of ours that's already acted this turn — show its
     // stats and ring it, but don't enter movement mode: leave selectedUnitId
     // unset so the next click still goes through this same selection path.
+    // Also preview its full threat range (yellow move / red attack-beyond-move)
+    // so the player can plan around it.
+    const { movable, extendedAttack } = scene.game_.getThreatPositions(clickedUnit.id);
     clearHighlights(scene);
+    highlightPositionSet(scene, movable, 0xffcc33, 0.45);
+    highlightPositionSet(scene, extendedAttack, 0xdd4444, 0.4);
     selectUnitForStats(scene, clickedUnit);
     return;
   }
-
+  
   scene.selectedUnitId = clickedUnit.id;
   const { positions } = scene.game_.getMovablePositions(clickedUnit.id);
   clearHighlights(scene);

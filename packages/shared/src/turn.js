@@ -20,6 +20,7 @@
  */
 
 import { ABILITY } from "./combat.js";
+import { getMaxHp } from "./combat-resolution.js";
 
 function hasAbility(unit, abilityId) {
   return unit.abilities?.some((a) => (typeof a === "object" ? a.id === abilityId : a === abilityId));
@@ -192,9 +193,39 @@ export function checkTeamDestroy(game, units, mapInfo, team) {
 
 // --- Turn rotation -----------------------------------------------------
 
-export function resetUnitForTurn(unit) {
+// Ported from UnitToolkit#getTerrainHeal. Neutral tiles (team -1, e.g. temples)
+// heal anyone; team-owned tiles (captured villages/castles) only heal units that
+// aren't enemies of the owner — critically, an ENEMY unit standing on a captured
+// tile gets 0, never a negative amount. `game` here is the full GameState instance
+// (nextTurn is always called with `this` from GameState#endTurn), so getTileAt and
+// isEnemy (below) are both safe to use despite this module's "plain game shape"
+// header comment describing a more decoupled future state.
+function getTerrainHeal(game, unit, tile) {
+  if (hasAbility(unit, ABILITY.BLOODTHIRSTY)) return 0;
+
+  let heal = 0;
+  if (tile.team === -1) {
+    heal += tile.hpRecovery;
+  } else if (!isEnemy(game, unit.team, tile.team)) {
+    heal += tile.hpRecovery;
+  }
+
+  if (hasAbility(unit, ABILITY.SON_OF_THE_MOUNTAIN) && tile.type === 3) heal += 10;
+  if (hasAbility(unit, ABILITY.SON_OF_THE_FOREST) && tile.type === 2) heal += 10;
+  if (hasAbility(unit, ABILITY.SON_OF_THE_SEA) && tile.type === 1) heal += 10;
+
+  return heal;
+}
+
+export function resetUnitForTurn(game, unit) {
   unit.currentMovementPoint = unit.maxMovementPoint;
   unit.standby = false;
+
+  const tile = game.getTileAt(unit.x, unit.y);
+  const heal = getTerrainHeal(game, unit, tile);
+  if (heal !== 0) {
+    unit.currentHp = Math.min(getMaxHp(unit), unit.currentHp + heal);
+  }
 }
 
 /**
@@ -203,9 +234,9 @@ export function resetUnitForTurn(unit) {
  */
 export function nextTurn(game, units, onNewRound) {
   for (const unit of units) {
-    if (unit.team === game.currentTeam) resetUnitForTurn(unit);
+    if (unit.team === game.currentTeam) resetUnitForTurn(game, unit);
   }
-  do {
+    do {
     if (game.currentTeam < 3) {
       game.currentTeam++;
     } else {

@@ -172,6 +172,35 @@ export class GameState {
     const { movable, moveMark } = createMovablePositions(this._board(), unit, { game: this });
     return { positions: movable, moveMark };
   }
+  
+    getMovablePositions(unitId) {
+    const unit = this.getUnit(unitId);
+    const { movable, moveMark } = createMovablePositions(this._board(), unit, { game: this });
+    return { positions: movable, moveMark };
+  }
+
+  /**
+   * Preview-mode movable positions (ignores occupancy/blocking, matching the original's
+   * beginPreviewPhase(true)) plus the attack range reachable from any of those tiles —
+   * used to show an enemy or already-acted unit's full threat range when selected for
+   * stats only. Not in the original (which only ever previews movement, no attack range),
+   * but a reasonable extension given we already compute both pieces.
+   */
+  getThreatPositions(unitId) {
+    const unit = this.getUnit(unitId);
+    const board = this._board();
+    const { movable } = createMovablePositions(board, unit, { preview: true });
+
+    const extendedAttack = new Set();
+    for (const key of movable) {
+      const [mx, my] = key.split(",").map(Number);
+      for (const pos of createAttackablePositions(board, { ...unit, x: mx, y: my })) {
+        if (!movable.has(pos)) extendedAttack.add(pos);
+      }
+    }
+
+    return { movable, extendedAttack };
+  }
 
   getMovePath(unitId, destX, destY) {
     const unit = this.getUnit(unitId);
