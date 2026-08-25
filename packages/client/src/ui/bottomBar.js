@@ -8,21 +8,57 @@
  *
  * Unlike the original (which tracks the pointer continuously), tile info here
  * updates on click — see updateBottomBarTile()'s call site in input/boardInput.js.
+ *
+ * The whole bar now doubles as the End Turn button (replacing the old floating
+ * "[ End Turn ]" text that used to sit awkwardly over the board) — it still shows
+ * tile/gold/turn info, but a right-aligned "End Turn ▶" label plus a click
+ * anywhere on the bar triggers the end-turn confirm flow.
  */
 import { TILE_SIZE } from "../constants.js";
+import { showConfirm } from "./dialogs.js";
+import { clearHighlights } from "../render/tiles.js";
+import { refreshUnits } from "../render/units.js";
+import { refreshStatsPanel } from "./statsPanel.js";
 
 export const BOTTOM_BAR_HEIGHT = 44;
 const BAR_HEIGHT = BOTTOM_BAR_HEIGHT;
 const PREVIEW_SIZE = 36;
+const END_TURN_ZONE_WIDTH = 100;
 
 export function createBottomBar(scene) {
   const barWidth = scene.game_.width * TILE_SIZE;
   const barY = scene.cameras.main.height - BAR_HEIGHT;
   const container = scene.add.container(0, barY);
   container.setScrollFactor(0);
-  
-  const bg = scene.add.rectangle(0, 0, barWidth, BAR_HEIGHT, 0x1a1a1a, 0.85).setOrigin(0, 0);
+
+  const bg = scene.add
+    .rectangle(0, 0, barWidth, BAR_HEIGHT, 0x1a1a1a, 0.85)
+    .setOrigin(0, 0)
+    .setInteractive();
   container.add(bg);
+  bg.on("pointerdown", () => {
+    if (scene.modalOpen || scene.animating || scene.actionBarOpen) return;
+    showConfirm(scene, "End your turn?", () => {
+      scene.game_.endTurn();
+      scene.selectedUnitId = null;
+      clearHighlights(scene);
+      refreshUnits(scene);
+      updateBottomBarEconomy(scene);
+      refreshStatsPanel(scene);
+    });
+  });
+
+  // Right-hand zone visually reads as the End Turn button, set off from the
+  // info section by a thin divider.
+  const zoneX = barWidth - END_TURN_ZONE_WIDTH;
+  const zoneBg = scene.add.rectangle(zoneX, 0, END_TURN_ZONE_WIDTH, BAR_HEIGHT, 0x3a3210, 0.6).setOrigin(0, 0);
+  container.add(zoneBg);
+  const divider = scene.add.rectangle(zoneX, 0, 2, BAR_HEIGHT, 0xffffff, 0.15).setOrigin(0, 0);
+  container.add(divider);
+  const endTurnText = scene.add
+    .text(zoneX + END_TURN_ZONE_WIDTH / 2, BAR_HEIGHT / 2, "End Turn \u25b6", { fontSize: "15px", color: "#ffdd44" })
+    .setOrigin(0.5, 0.5);
+  container.add(endTurnText);
 
   // --- selected (clicked) tile preview + terrain specs ---
   const previewX = 4;
@@ -53,7 +89,8 @@ export function createBottomBar(scene) {
   container.add(goldText);
 
   // --- turn count (no original asset found — drawn as a simple clock) ---
-  const turnX = 360;
+  // Kept clear of the End Turn zone on the right (zoneX = barWidth - 100).
+  const turnX = 300;
   const clockG = scene.add.graphics();
   clockG.lineStyle(2, 0xffffff, 1);
   clockG.strokeCircle(turnX, BAR_HEIGHT / 2, 9);

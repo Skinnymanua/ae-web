@@ -1,19 +1,18 @@
 /**
- * Top-of-map stats bar, styled after the reference screenshot: three cells side by
- * side (left stat pair-column, center unit portrait, right stat pair-column), each
- * stat row a colored circular icon badge next to a pill-shaped value background.
- * Not from the original (which used a text-only side panel — see RightPanelRenderer)
- * — this is a bespoke layout built from the original's icon assets.
+ * Top-of-map stats bar, styled after the reference screenshot: two cells side by
+ * side (stat column, center unit portrait), each stat row a colored circular icon
+ * badge next to a pill-shaped value background. Not from the original (which used
+ * a text-only side panel — see RightPanelRenderer) — this is a bespoke layout built
+ * from the original's icon assets.
  *
- * Left column top-to-bottom: HP / Attack / Defence.
- * Right column top-to-bottom: Level / Magic strength (magic defence) / Move (max
- * tiles per move).
+ * Column top-to-bottom: HP / Attack / Defence. The right-hand column (Level /
+ * Magic strength / Move) was dropped — those stats weren't pulling their weight
+ * next to the portrait and command bar.
  */
 import { HUD_ICON, STAT_ICON, TILE_SIZE, BOARD_OFFSET_Y } from "../constants.js";
 import {
   getEffectiveAttack,
   getEffectivePhysicalDefence,
-  getEffectiveMagicDefence,
   getMaxHp,
 } from "@ae/shared/src/combat-resolution.js";
 
@@ -63,37 +62,32 @@ export function createStatsPanel(scene) {
   const g = scene.add.graphics();
   container.add(g);
 
-  const centerX = barWidth / 2;
   const cellGap = 6;
   const cellPad = 4;
-  const leftCellRight = centerX - PORTRAIT_SIZE / 2 - cellGap;
-  const rightCellLeft = centerX + PORTRAIT_SIZE / 2 + cellGap;
+  const leftCellWidth = PILL_WIDTH + BADGE_RADIUS * 2 + 8;
+  const leftCellRight = cellPad + leftCellWidth;
+  const cx = leftCellRight + cellGap + PORTRAIT_SIZE / 2;
 
   g.fillStyle(CELL_BG, 1);
-  g.fillRoundedRect(cellPad, cellPad, leftCellRight - cellPad, BAR_HEIGHT - cellPad * 2, 8);
-  g.fillRoundedRect(rightCellLeft, cellPad, barWidth - cellPad - rightCellLeft, BAR_HEIGHT - cellPad * 2, 8);
+  g.fillRoundedRect(cellPad, cellPad, leftCellWidth, BAR_HEIGHT - cellPad * 2, 8);
   g.fillStyle(0x14161f, 1);
-  g.fillRoundedRect(centerX - PORTRAIT_SIZE / 2, cellPad, PORTRAIT_SIZE, BAR_HEIGHT - cellPad * 2, 8);
+  g.fillRoundedRect(cx - PORTRAIT_SIZE / 2, cellPad, PORTRAIT_SIZE, BAR_HEIGHT - cellPad * 2, 8);
   g.lineStyle(2, 0xffffff, 0.6);
-  g.strokeRoundedRect(centerX - PORTRAIT_SIZE / 2, cellPad, PORTRAIT_SIZE, BAR_HEIGHT - cellPad * 2, 8);
+  g.strokeRoundedRect(cx - PORTRAIT_SIZE / 2, cellPad, PORTRAIT_SIZE, BAR_HEIGHT - cellPad * 2, 8);
 
   const leftX = 10;
-  const rightX = barWidth - 10;
   let rowY = 6;
 
   const texts = {};
   texts.hp = addStatRow(scene, container, g, leftX, rowY, "hp", "icons_action", STAT_ICON.HP, "left");
-  texts.level = addStatRow(scene, container, g, rightX, rowY, "level", "icons_hud_battle", HUD_ICON.LEVEL, "right");
   rowY += ROW_HEIGHT;
   texts.attack = addStatRow(scene, container, g, leftX, rowY, "attack", "icons_hud_battle", HUD_ICON.ATTACK, "left");
-  texts.mdef = addStatRow(scene, container, g, rightX, rowY, "mdef", "icons_hud_battle", HUD_ICON.MDEF, "right");
   rowY += ROW_HEIGHT;
   texts.pdef = addStatRow(scene, container, g, leftX, rowY, "pdef", "icons_hud_battle", HUD_ICON.PDEF, "left");
-  texts.move = addStatRow(scene, container, g, rightX, rowY, "move", "icons_action", STAT_ICON.MOVE, "right");
 
   container.setVisible(false);
   container.setScrollFactor(0);
-  scene.statsPanel = { container, texts, portrait: null, head: null, centerX };
+  scene.statsPanel = { container, texts, portrait: null, head: null, centerX: cx };
   scene.statsPanelUnitId = null;
 }
 
@@ -132,9 +126,6 @@ export function updateStatsPanel(scene, unit) {
   panel.texts.attack.setColor(attackColor);
 
   panel.texts.pdef.setText(String(getEffectivePhysicalDefence(unit)));
-  panel.texts.level.setText(String(unit.level));
-  panel.texts.mdef.setText(String(getEffectiveMagicDefence(unit)));
-  panel.texts.move.setText(String(unit.maxMovementPoint));
 }
 
 /** Re-renders the panel for whichever unit it's currently showing — call after
