@@ -1,4 +1,4 @@
-/**
+	/**
  * Bottom bar — loosely ported from StatusBarRenderer.java, which drew the
  * currently-hovered tile (with its defence bonus) plus population and gold along
  * the bottom edge. We don't show population here (not asked for), and there's no
@@ -34,6 +34,7 @@ export function createBottomBar(scene) {
   const bg = scene.add
     .rectangle(0, 0, barWidth, BAR_HEIGHT, 0x1a1a1a, 0.85)
     .setOrigin(0, 0)
+    .setScrollFactor(0)  
     .setInteractive();
   container.add(bg);
   bg.on("pointerdown", () => {

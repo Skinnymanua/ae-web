@@ -1,4 +1,4 @@
-import unitsData from "@ae/shared/data/units.json";
+	import unitsData from "@ae/shared/data/units.json";
 import { highlightPositionSet, clearHighlights } from "../render/tiles.js";
 
 /** Simple modal Yes/No confirm box. Sets scene.modalOpen while shown, blocking board input. */
@@ -11,8 +11,8 @@ export function showConfirm(scene, message, onYes, onNo) {
   const text = scene.add
     .text(0, -30, message, { fontSize: "14px", color: "#ffffff", wordWrap: { width: 230 }, align: "center" })
     .setOrigin(0.5, 0.5);
-  const yesText = scene.add.text(-60, 25, "[ Yes ]", { fontSize: "16px", color: "#44dd88" }).setInteractive();
-  const noText = scene.add.text(20, 25, "[ No ]", { fontSize: "16px", color: "#dd4444" }).setInteractive();
+  const yesText = scene.add.text(-60, 25, "[ Yes ]", { fontSize: "16px", color: "#44dd88" }).setScrollFactor(0).setInteractive();
+  const noText = scene.add.text(20, 25, "[ No ]", { fontSize: "16px", color: "#dd4444" }).setScrollFactor(0).setInteractive();
   container.add([bg, text, yesText, noText]);
 
   yesText.on("pointerdown", () => {
@@ -64,9 +64,9 @@ export function showBuyMenu(scene) {
 
   affordable.forEach((def, i) => {
     const label = scene.add
-      .text(0, i * rowHeight, `Unit #${def.index} — ${def.price}g`, { fontSize: "13px", color: "#ffffff" })
-      .setInteractive();
-    label.on("pointerdown", () => {
+    .text(0, i * rowHeight, `Unit #${def.index} — ${def.price}g`, { fontSize: "13px", color: "#ffffff" })
+    .setScrollFactor(0)
+    .setInteractive();    label.on("pointerdown", () => {
       scene.modalOpen = false;
       container.destroy();
       scene.pendingBuyUnitIndex = def.index;
@@ -84,6 +84,7 @@ export function showBuyMenu(scene) {
 
   const cancelText = scene.add
     .text(0, affordable.length * rowHeight + 10, "[ Cancel ]", { fontSize: "13px", color: "#dd4444" })
+    .setScrollFactor(0)
     .setInteractive();
   cancelText.on("pointerdown", () => {
     scene.modalOpen = false;
