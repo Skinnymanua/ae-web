@@ -72,6 +72,10 @@ export class BoardScene extends Phaser.Scene {
       frameWidth: 11,
       frameHeight: 11,
     });
+    this.load.spritesheet("chars_large", "/images/chars_large.png", {
+      frameWidth: 8,
+      frameHeight: 11,
+    });
   }
 
   create() {

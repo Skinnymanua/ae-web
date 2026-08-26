@@ -220,17 +220,52 @@ function getTerrainHeal(game, unit, tile) {
 export function resetUnitForTurn(game, unit) {
   unit.currentMovementPoint = unit.maxMovementPoint;
   unit.standby = false;
+}
 
-  const tile = game.getTileAt(unit.x, unit.y);
-  const heal = getTerrainHeal(game, unit, tile);
-  if (heal !== 0) {
-    unit.currentHp = Math.min(getMaxHp(unit), unit.currentHp + heal);
+// Ported from UnitToolkit.validateHpChange — clamps an hp delta so
+// currentHp+change never leaves [0, maxHp], and returns the (possibly
+// smaller) actual delta rather than the requested one.
+function validateHpChange(unit, change) {
+  const originHp = unit.currentHp;
+  let changedHp = originHp + change;
+  const maxHp = getMaxHp(unit);
+  if (changedHp > maxHp) changedHp = maxHp;
+  if (changedHp < 0) changedHp = 0;
+  return changedHp - originHp;
+}
+
+// House-rule deviation from the original: in project_aeii, siege damage fires
+// relative to getNextTeam() at the moment the SQUATTER'S OWN team clicks End
+// Turn (see OperationExecutor#onNextTurn — it's computed synchronously as part
+// of whichever team is currently ending its turn, using the incoming team as
+// the reference point). In a 2-team match that means the -50 always lands the
+// instant the squatter hands off to the castle owner, one transition earlier
+// than feels right here — this port instead applies it a half-round later, at
+// the START OF THE SQUATTER'S OWN NEXT TURN, so a unit has to have survived a
+// full round sitting on the enemy castle before it's punished for it.
+const CASTLE_SIEGE_DAMAGE = 50;
+function getCastleSiegeChange(game, unit, tile) {
+  if (isEnemy(game, unit.team, tile.team) && tile.castle) {
+    return -CASTLE_SIEGE_DAMAGE;
   }
+  return 0;
 }
 
 /**
- * Advances to the next living team's turn, resetting the outgoing team's units.
- * Mutates and returns `game`.
+ * Advances to the next living team's turn, resetting the outgoing team's units,
+ * then — for the INCOMING team's own units — applies terrain heal, plus castle
+ * siege damage for any of them squatting on an enemy-owned castle (see
+ * getCastleSiegeChange's note above for why this fires on the squatter's own
+ * turn rather than OperationExecutor#onNextTurn's original schedule).
+ *
+ * Mutates `game` and each affected unit's currentHp. Does NOT remove destroyed
+ * units or run the team-destroy check — same division of responsibility as
+ * combat-resolution.js's resolveAttack/applyAttack: this returns what happened
+ * (hpChanges, destroyedUnitIds), and the caller (GameState#endTurn) is
+ * responsible for removing dead units and calling checkTeamDestroy, exactly
+ * like applyAttack does for combat.
+ *
+ * @returns {{hpChanges: Array<{unitId, x, y, change}>, destroyedUnitIds: string[]}}
  */
 export function nextTurn(game, units, onNewRound) {
   for (const unit of units) {
@@ -245,5 +280,27 @@ export function nextTurn(game, units, onNewRound) {
     }
   } while (!isTeamAlive(game, game.currentTeam));
   game.turn++;
-  return game;
+
+  // Hp changes run for the INCOMING team's own units only, after the switch
+  // above — this was previously bundled into resetUnitForTurn and run for the
+  // outgoing team before the switch, which made healing visibly land at the
+  // start of the next (often enemy) team's turn instead of at the start of
+  // the healed team's own turn, and never checked siege damage at all. Both
+  // terrain heal and castle siege now key off the SAME "is this my own turn
+  // starting" check — a unit on an enemy castle just gets 0 heal (per
+  // getTerrainHeal's own isEnemy gate) plus -50 siege instead.
+  const hpChanges = [];
+  const destroyedUnitIds = [];
+  for (const unit of units) {
+    if (unit.team !== game.currentTeam) continue;
+    const tile = game.getTileAt(unit.x, unit.y);
+    const change = validateHpChange(unit, getTerrainHeal(game, unit, tile) + getCastleSiegeChange(game, unit, tile));
+    if (change !== 0) {
+      unit.currentHp += change;
+      hpChanges.push({ unitId: unit.id, x: unit.x, y: unit.y, change });
+      if (unit.currentHp <= 0) destroyedUnitIds.push(unit.id);
+    }
+  }
+
+  return { hpChanges, destroyedUnitIds };
 }
