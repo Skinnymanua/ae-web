@@ -21,3 +21,18 @@ export const STAT_ICON = { HP: 7, MOVE: 4 };
 // with magic defence. HP and XP rows have no icon in the original at all —
 // just "HP "/"XP " text prefixes.
 export const HUD_ICON = { LEVEL: 3, ATTACK: 0, PDEF: 1, MDEF: 2 };
+
+// Explicit render-layer ordering. Without setDepth(), Phaser falls back to
+// creation order — that broke down because refreshUnits() (render/units.js)
+// destroys and recreates every unit sprite on nearly every action (move, buy,
+// attack, standby...), which re-adds them to the *top* of the display list each
+// time — putting units above the top/bottom stats bars (created once, at scene
+// start) whenever a unit sat near the board's top or bottom edge. Explicit
+// depths make layering independent of creation/refresh order.
+export const DEPTH = {
+  TILES: 0,
+  UNITS: 10,
+  ACTION_BAR: 20,
+  STATS_BARS: 30, // top stats bar (ui/statsPanel.js) + bottom bar (ui/bottomBar.js)
+  DIALOG: 40,
+};

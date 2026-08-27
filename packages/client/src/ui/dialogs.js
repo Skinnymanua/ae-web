@@ -1,5 +1,6 @@
 	import unitsData from "@ae/shared/data/units.json";
 import { highlightPositionSet, clearHighlights } from "../render/tiles.js";
+import { DEPTH } from "../constants.js";
 
 /** Simple modal Yes/No confirm box. Sets scene.modalOpen while shown, blocking board input. */
 export function showConfirm(scene, message, onYes, onNo) {
@@ -7,6 +8,10 @@ export function showConfirm(scene, message, onYes, onNo) {
   const cam = scene.cameras.main;
   const container = scene.add.container(cam.width / 2, cam.height / 2);
   container.setScrollFactor(0);
+  // Above the stats bars too (see constants.js DEPTH) — a modal must always
+  // read as topmost, same reasoning as the stats-bar fix: units/bars get
+  // recreated during play and would otherwise climb back over a static-depth dialog.
+  container.setDepth(DEPTH.DIALOG);
   const bg = scene.add.rectangle(0, 0, 260, 110, 0x000000, 0.9).setStrokeStyle(2, 0xffffff);
   const text = scene.add
     .text(0, -30, message, { fontSize: "14px", color: "#ffffff", wordWrap: { width: 230 }, align: "center" })
@@ -47,6 +52,7 @@ export function showBuyMenu(scene) {
   const cam = scene.cameras.main;
   const container = scene.add.container(cam.width / 2 - panelWidth / 2 + 20, cam.height / 2 - panelHeight / 2);
   container.setScrollFactor(0);
+  container.setDepth(DEPTH.DIALOG);
 
   const bg = scene.add
     .rectangle(90, panelHeight / 2 - 10, panelWidth, panelHeight, 0x111111, 0.92)

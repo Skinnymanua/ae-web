@@ -1,4 +1,4 @@
-import { TILE_SIZE, BOARD_OFFSET_Y } from "../constants.js";
+import { TILE_SIZE, BOARD_OFFSET_Y, DEPTH } from "../constants.js";
 import { getMaxHp } from "@ae/shared/src/combat-resolution.js";
 
 const FRAMES_PER_ROW = 19; // unit count — matches ResourceManager's texture_size derivation
@@ -32,6 +32,7 @@ export function refreshUnits(scene) {
     sprite.setTint(unit.standby ? 0x888888 : 0xffffff);
     sprite.setData("unitIndex", unit.unitIndex);
     sprite.setData("standby", unit.standby);
+    sprite.setDepth(DEPTH.UNITS);
     // Not interactive: unit sprites sit on top of their tile, and the tile's
     // own pointerdown (drawTileGrid) handles selection/movement. Keeping units
     // non-interactive avoids blocking that click — see boardInput.js for how
@@ -46,6 +47,7 @@ export function refreshUnits(scene) {
       head.setOrigin(0, 0);
       head.setDisplaySize((TILE_SIZE * 13) / 24, (TILE_SIZE * 12) / 24);
       head.setTint(unit.standby ? 0x888888 : 0xffffff);
+      head.setDepth(DEPTH.UNITS);
       scene.headSprites[unit.id] = head;
     }
 
@@ -60,6 +62,7 @@ export function refreshUnits(scene) {
         const digitSprite = scene.add.sprite(topLeftX + i * SCHAR_WIDTH, digitY, "chars_small", n);
         digitSprite.setOrigin(0, 0);
         digitSprite.setDisplaySize(SCHAR_WIDTH, SCHAR_HEIGHT);
+        digitSprite.setDepth(DEPTH.UNITS);
         scene.hpDigitSprites[unit.id].push(digitSprite);
       });
     }

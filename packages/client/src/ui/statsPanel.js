@@ -9,7 +9,7 @@
  * Right column top-to-bottom: Level / Magic strength (magic defence) / Move (max
  * tiles per move).
  */
-import { HUD_ICON, STAT_ICON, TILE_SIZE, BOARD_OFFSET_Y } from "../constants.js";
+import { HUD_ICON, STAT_ICON, TILE_SIZE, BOARD_OFFSET_Y, DEPTH } from "../constants.js";
 import {
   getEffectiveAttack,
   getEffectivePhysicalDefence,
@@ -93,6 +93,10 @@ export function createStatsPanel(scene) {
 
   container.setVisible(false);
   container.setScrollFactor(0);
+  // Explicit depth: refreshUnits() (render/units.js) recreates unit sprites on
+  // nearly every action, which re-adds them at the top of the display list — without
+  // this, a unit near the board's top edge would render over this bar. See constants.js.
+  container.setDepth(DEPTH.STATS_BARS);
   scene.statsPanel = { container, texts, portrait: null, head: null, centerX };
   scene.statsPanelUnitId = null;
 }
