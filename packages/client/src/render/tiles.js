@@ -1,4 +1,4 @@
-import { TILE_SIZE, BOARD_OFFSET_Y } from "../constants.js";
+import { TILE_SIZE, BOARD_OFFSET_Y, DEPTH } from "../constants.js";
 
 // Pixels of pointer movement (in screen space) below which a pointerdown→pointerup
 // on a tile still counts as a click rather than the start of a camera drag.
@@ -95,6 +95,7 @@ export function highlightSelectedTile(scene, x, y) {
 
   const sprite = scene.add.sprite(cx, cy, "cursor_normal", 0);
   sprite.setDisplaySize(size, size);
+  sprite.setDepth(DEPTH.BOARD + 1); // above tiles, below units
   scene.selectedTileHighlight = sprite;
 }
 

@@ -1,4 +1,4 @@
-import { ACTION_ICON, STAT_ICON, TILE_SIZE, BOARD_OFFSET_Y } from "../constants.js";
+import { ACTION_ICON, STAT_ICON, TILE_SIZE, BOARD_OFFSET_Y, DEPTH } from "../constants.js";
 import { clearHighlights, addHighlight, refreshTileTexture } from "../render/tiles.js";
 import { refreshUnits } from "../render/units.js";
 import { showBuyMenu } from "./dialogs.js";
@@ -140,6 +140,7 @@ export function showActionBar(scene, unit, x, y) {
   const viewBottom = scrollY + (scene.cameras.main.height - BOTTOM_BAR_HEIGHT) - ICON_CLEARANCE;
 
   scene.actionBarContainer = scene.add.container(0, 0);
+  scene.actionBarContainer.setDepth(DEPTH.ACTION_BAR);
 
   slots.forEach(({ slot, frame, onClick }, i) => {
     const offset = SLOT_OFFSET[slot];

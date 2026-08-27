@@ -1,7 +1,7 @@
 	import unitsData from "@ae/shared/data/units.json";
 import unitTextData from "@ae/shared/data/unit-text.json";
 import { highlightPositionSet, clearHighlights } from "../render/tiles.js";
-import { HUD_ICON, STAT_ICON } from "../constants.js";
+import { HUD_ICON, STAT_ICON, DEPTH } from "../constants.js";
 
 const UNIT_TEXT_BY_INDEX = new Map(unitTextData.units.map((u) => [u.index, u]));
 
@@ -11,6 +11,7 @@ export function showConfirm(scene, message, onYes, onNo) {
   const cam = scene.cameras.main;
   const container = scene.add.container(cam.width / 2, cam.height / 2);
   container.setScrollFactor(0);
+  container.setDepth(DEPTH.MODAL);
   const bg = scene.add.rectangle(0, 0, 260, 110, 0x000000, 0.9).setStrokeStyle(2, 0xffffff);
   const text = scene.add
     .text(0, -30, message, { fontSize: "14px", color: "#ffffff", wordWrap: { width: 230 }, align: "center" })
@@ -68,6 +69,7 @@ export function showBuyMenu(scene) {
   const cam = scene.cameras.main;
   const container = scene.add.container(cam.width / 2 - CARD_WIDTH / 2, cam.height / 2 - CARD_HEIGHT / 2);
   container.setScrollFactor(0);
+  container.setDepth(DEPTH.MODAL);
 
   const bg = scene.add.rectangle(CARD_WIDTH / 2, CARD_HEIGHT / 2, CARD_WIDTH, CARD_HEIGHT, 0x161b2c, 0.96).setStrokeStyle(2, 0xffffff);
   container.add(bg);

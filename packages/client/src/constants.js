@@ -1,5 +1,18 @@
 export const TILE_SIZE = 48;
 
+// Explicit render-order tiers. Phaser draws by depth first, then by add-order
+// within the same depth — so without these, anything re-added later (units get
+// destroyed/recreated by refreshUnits on every move/buy/end-turn) can end up
+// drawn on top of UI that was created earlier, like the stats panel or buy menu.
+// Keep gaps between tiers so new layers can be inserted without renumbering.
+export const DEPTH = {
+  BOARD: 0,
+  UNITS: 100,
+  HUD: 200, // top stats bar + bottom bar (always-visible overlays)
+  ACTION_BAR: 300, // compass action wheel — sits above HUD when a unit is selected
+  MODAL: 400, // buy menu, confirm dialogs — always on top
+};
+
 // Height of the top stats bar (see ui/statsPanel.js) — the board is drawn shifted
 // down by this much so the bar sits in its own space above the map, not overlapping it.
 export const BOARD_OFFSET_Y = 76;

@@ -14,7 +14,7 @@
  * tile/gold/turn info, but a right-aligned "End Turn ▶" label plus a click
  * anywhere on the bar triggers the end-turn confirm flow.
  */
-import { TILE_SIZE } from "../constants.js";
+import { TILE_SIZE, DEPTH } from "../constants.js";
 import { showConfirm } from "./dialogs.js";
 import { clearHighlights } from "../render/tiles.js";
 import { refreshUnits } from "../render/units.js";
@@ -31,6 +31,7 @@ export function createBottomBar(scene) {
   const barY = scene.cameras.main.height - BAR_HEIGHT;
   const container = scene.add.container(0, barY);
   container.setScrollFactor(0);
+  container.setDepth(DEPTH.HUD);
 
   const bg = scene.add
     .rectangle(0, 0, barWidth, BAR_HEIGHT, 0x1a1a1a, 0.85)
