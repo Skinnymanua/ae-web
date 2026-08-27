@@ -10,6 +10,7 @@
     "./src/game-state.js": "./src/game-state.js",
     "./data/units.json": "./data/units.json",
     "./data/tiles.json": "./data/tiles.json",
+    "./data/unit-text.json": "./data/unit-text.json",
     "./src/*": "./src/*"
   }
 }

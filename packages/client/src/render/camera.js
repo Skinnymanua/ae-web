@@ -67,3 +67,60 @@ export function resetCamera(scene) {
     ease: "Sine.InOut",
   });
 }
+
+/** Clamp bounds for manual scroll — same overscroll allowance as the unit auto-pan,
+ * but centered on the board's actual edges rather than a specific unit's position. */
+function getScrollBounds(scene) {
+  const cam = scene.cameras.main;
+  const boardWidth = scene.game_.width * TILE_SIZE;
+  const boardHeight = scene.game_.height * TILE_SIZE;
+  const playableBottom = cam.height - BOTTOM_BAR_HEIGHT;
+  return {
+    minX: -OVERSCROLL,
+    maxX: boardWidth - cam.width + OVERSCROLL,
+    minY: BOARD_OFFSET_Y - OVERSCROLL,
+    maxY: BOARD_OFFSET_Y + boardHeight - playableBottom + OVERSCROLL,
+  };
+}
+
+/**
+ * Click-and-drag panning for the board. Tracks total pointer movement on
+ * scene.boardDragDistance so render/tiles.js can tell a drag apart from a
+ * tap (a drag shouldn't also select/act on the tile under the pointer).
+ * Only active while no modal/action-bar/buy menu is open, so it never
+ * fights with UI that has its own drag handling (e.g. the buy menu's
+ * unit strip).
+ */
+export function setupBoardDragScroll(scene) {
+  scene.boardDragDistance = 0;
+  let dragging = false;
+  let lastX = 0;
+  let lastY = 0;
+
+  scene.input.on("pointerdown", (pointer) => {
+    if (scene.modalOpen) return;
+    dragging = true;
+    scene.boardDragDistance = 0;
+    lastX = pointer.x;
+    lastY = pointer.y;
+  });
+
+  scene.input.on("pointermove", (pointer) => {
+    if (!dragging || !pointer.isDown) return;
+    const dx = pointer.x - lastX;
+    const dy = pointer.y - lastY;
+    scene.boardDragDistance += Math.abs(dx) + Math.abs(dy);
+
+    const cam = scene.cameras.main;
+    const bounds = getScrollBounds(scene);
+    cam.scrollX = clampScroll(cam.scrollX - dx, bounds.minX, bounds.maxX);
+    cam.scrollY = clampScroll(cam.scrollY - dy, bounds.minY, bounds.maxY);
+
+    lastX = pointer.x;
+    lastY = pointer.y;
+  });
+
+  scene.input.on("pointerup", () => {
+    dragging = false;
+  });
+}
