@@ -1,0 +1,156 @@
+diff --git a/packages/client/src/input/cameraDrag.js b/packages/client/src/input/cameraDrag.js
+new file mode 100644
+index 0000000..95f04b5
+--- /dev/null
++++ b/packages/client/src/input/cameraDrag.js
+@@ -0,0 +1,64 @@
++import { getScrollBounds } from "../render/camera.js";
++
++// Pointer must move at least this many pixels (from its down position) before a
++// press counts as a drag rather than a tap — keeps ordinary tile clicks (handled
++// by each tile sprite's own "pointerdown" in render/tiles.js) working normally.
++const DRAG_THRESHOLD = 6;
++
++/**
++ * Wires click-and-drag camera panning onto the board. Not from the original
++ * (project_aeii's GameScreen has no camera scrolling at all — see render/camera.js);
++ * this is a bespoke addition so players can freely look around a board larger than
++ * the viewport, on top of the existing unit-follow auto-pan.
++ *
++ * Implemented as a scene-level pointer listener (not a per-tile handler like
++ * boardInput.js's clicks) since a drag can start on one tile and move over many.
++ * Only scrolls scene.cameras.main — every HUD element is setScrollFactor(0) so it's
++ * unaffected (see render/camera.js's header comment).
++ */
++export function setupCameraDrag(scene) {
++  let dragging = false;
++  let dragStartX = 0;
++  let dragStartY = 0;
++  let camStartX = 0;
++  let camStartY = 0;
++
++  scene.input.on("pointerdown", (pointer) => {
++    dragging = false; // becomes true only once DRAG_THRESHOLD is crossed
++    dragStartX = pointer.x;
++    dragStartY = pointer.y;
++    camStartX = scene.cameras.main.scrollX;
++    camStartY = scene.cameras.main.scrollY;
++  });
++
++  scene.input.on("pointermove", (pointer) => {
++    if (!pointer.isDown) return;
++
++    const dx = pointer.x - dragStartX;
++    const dy = pointer.y - dragStartY;
++
++    if (!dragging) {
++      if (Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
++      dragging = true;
++      // A real drag is starting — stop any in-flight unit-follow pan so it
++      // doesn't fight the player's own scrolling.
++      scene.tweens.killTweensOf(scene.cameras.main);
++    }
++
++    const bounds = getScrollBounds(scene);
++    const cam = scene.cameras.main;
++    cam.scrollX = Math.max(bounds.minX, Math.min(bounds.maxX, camStartX - dx));
++    cam.scrollY = Math.max(bounds.minY, Math.min(bounds.maxY, camStartY - dy));
++  });
++
++  const endDrag = () => {
++    dragging = false;
++  };
++  scene.input.on("pointerup", endDrag);
++  scene.input.on("pointerupoutside", endDrag);
++
++  // Exposed so tile click handlers can tell a drag-release apart from a tap —
++  // Phaser still fires the tile's own "pointerdown"/click on press, so without
++  // this a drag would also trigger tile selection/movement underneath it.
++  scene.isCameraDragging = () => dragging;
++}
+diff --git a/packages/client/src/render/camera.js b/packages/client/src/render/camera.js
+index 18dd3d0..6263695 100644
+--- a/packages/client/src/render/camera.js
++++ b/packages/client/src/render/camera.js
+@@ -23,6 +23,23 @@ function clampScroll(target, edgeA, edgeB) {
+   return Math.max(min, Math.min(max, target));
+ }
+ 
++/** The min/max scrollX/scrollY the camera is allowed to reach — same overscroll
++ * allowance used by getCameraTargetForUnit, shared here so drag-panning clamps
++ * to the same edges as the unit-follow camera. */
++export function getScrollBounds(scene) {
++  const cam = scene.cameras.main;
++  const boardWidth = scene.game_.width * TILE_SIZE;
++  const boardHeight = scene.game_.height * TILE_SIZE;
++  const playableBottom = cam.height - BOTTOM_BAR_HEIGHT;
++
++  return {
++    minX: -OVERSCROLL,
++    maxX: boardWidth - cam.width + OVERSCROLL,
++    minY: -OVERSCROLL,
++    maxY: BOARD_OFFSET_Y + boardHeight - playableBottom + OVERSCROLL,
++  };
++}
++
+ /** The scroll position that centers `unit` in the playable area (between the top
+  * stats bar and bottom info bar), clamped. Shared by panCameraToUnit (to animate
+  * it) and showActionBar (to know the final visible range for icon placement). */
+diff --git a/packages/client/src/render/tiles.js b/packages/client/src/render/tiles.js
+index 5a558ef..53413e9 100644
+--- a/packages/client/src/render/tiles.js
++++ b/packages/client/src/render/tiles.js
+@@ -15,7 +15,13 @@ export function drawTileGrid(scene, onTileClick) {
+       );
+       sprite.setDisplaySize(TILE_SIZE, TILE_SIZE);
+       sprite.setInteractive();
+-      sprite.on("pointerdown", () => onTileClick(x, y));
++      // Fires on release, not press, and is skipped if the press turned into a
++      // camera drag (see input/cameraDrag.js) — otherwise a drag starting on a
++      // tile would also select/move a unit underneath the pan.
++      sprite.on("pointerup", () => {
++        if (scene.isCameraDragging && scene.isCameraDragging()) return;
++        onTileClick(x, y);
++      });
+       scene.tileSprites[x].push(sprite);
+     }
+   }
+diff --git a/packages/client/src/scenes/BoardScene.js b/packages/client/src/scenes/BoardScene.js
+index 3c0b19f..bf74140 100644
+--- a/packages/client/src/scenes/BoardScene.js
++++ b/packages/client/src/scenes/BoardScene.js
+@@ -9,6 +9,7 @@ import { refreshUnits, animateUnits } from "../render/units.js";
+ import { createHud } from "../ui/hud.js";
+ import { createStatsPanel } from "../ui/statsPanel.js";
+ import { onTileClick } from "../input/boardInput.js";
++import { setupCameraDrag } from "../input/cameraDrag.js";
+ 
+ export class BoardScene extends Phaser.Scene {
+   preload() {
+@@ -118,6 +119,7 @@ export class BoardScene extends Phaser.Scene {
+     refreshUnits(this);
+     createHud(this);
+     createStatsPanel(this);
++    setupCameraDrag(this);
+   }
+ 
+     update(time, delta) {
+diff --git a/packages/client/src/ui/actionBar.js b/packages/client/src/ui/actionBar.js
+index e25605b..83851ef 100644
+--- a/packages/client/src/ui/actionBar.js
++++ b/packages/client/src/ui/actionBar.js
+@@ -150,7 +150,13 @@ export function showActionBar(scene, unit, x, y) {
+     bg.setInteractive();
+     const iconImg = scene.add.image(cx, cy, "icons_action", frame);
+     iconImg.setDisplaySize(32, 32); // was 24 — too much padding inside the 40px circle
+-    bg.on("pointerdown", onClick);
++    // pointerup (not pointerdown) to match the tile sprites underneath (see
++    // render/tiles.js), and stopPropagation so that same tile's own pointerup
++    // handler doesn't also fire and cancel the action bar out from under this click.
++    bg.on("pointerup", (pointer, localX, localY, event) => {
++      event.stopPropagation();
++      onClick();
++    });
+     scene.actionBarContainer.add([bg, iconImg]);
+ 
+     // Pop out from the unit's center to its compass slot, staggered per button —

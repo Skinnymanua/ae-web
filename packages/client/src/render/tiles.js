@@ -15,7 +15,13 @@ export function drawTileGrid(scene, onTileClick) {
       );
       sprite.setDisplaySize(TILE_SIZE, TILE_SIZE);
       sprite.setInteractive();
-      sprite.on("pointerdown", () => onTileClick(x, y));
+      // Fires on release, not press, and is skipped if the press turned into a
+      // camera drag (see input/cameraDrag.js) — otherwise a drag starting on a
+      // tile would also select/move a unit underneath the pan.
+      sprite.on("pointerup", () => {
+        if (scene.isCameraDragging && scene.isCameraDragging()) return;
+        onTileClick(x, y);
+      });
       scene.tileSprites[x].push(sprite);
     }
   }

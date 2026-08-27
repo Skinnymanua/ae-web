@@ -23,6 +23,23 @@ function clampScroll(target, edgeA, edgeB) {
   return Math.max(min, Math.min(max, target));
 }
 
+/** The min/max scrollX/scrollY the camera is allowed to reach — same overscroll
+ * allowance used by getCameraTargetForUnit, shared here so drag-panning clamps
+ * to the same edges as the unit-follow camera. */
+export function getScrollBounds(scene) {
+  const cam = scene.cameras.main;
+  const boardWidth = scene.game_.width * TILE_SIZE;
+  const boardHeight = scene.game_.height * TILE_SIZE;
+  const playableBottom = cam.height - BOTTOM_BAR_HEIGHT;
+
+  return {
+    minX: -OVERSCROLL,
+    maxX: boardWidth - cam.width + OVERSCROLL,
+    minY: -OVERSCROLL,
+    maxY: BOARD_OFFSET_Y + boardHeight - playableBottom + OVERSCROLL,
+  };
+}
+
 /** The scroll position that centers `unit` in the playable area (between the top
  * stats bar and bottom info bar), clamped. Shared by panCameraToUnit (to animate
  * it) and showActionBar (to know the final visible range for icon placement). */

@@ -150,7 +150,13 @@ export function showActionBar(scene, unit, x, y) {
     bg.setInteractive();
     const iconImg = scene.add.image(cx, cy, "icons_action", frame);
     iconImg.setDisplaySize(32, 32); // was 24 — too much padding inside the 40px circle
-    bg.on("pointerdown", onClick);
+    // pointerup (not pointerdown) to match the tile sprites underneath (see
+    // render/tiles.js), and stopPropagation so that same tile's own pointerup
+    // handler doesn't also fire and cancel the action bar out from under this click.
+    bg.on("pointerup", (pointer, localX, localY, event) => {
+      event.stopPropagation();
+      onClick();
+    });
     scene.actionBarContainer.add([bg, iconImg]);
 
     // Pop out from the unit's center to its compass slot, staggered per button —

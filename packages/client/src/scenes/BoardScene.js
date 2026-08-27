@@ -9,6 +9,7 @@ import { refreshUnits, animateUnits } from "../render/units.js";
 import { createHud } from "../ui/hud.js";
 import { createStatsPanel } from "../ui/statsPanel.js";
 import { onTileClick } from "../input/boardInput.js";
+import { setupCameraDrag } from "../input/cameraDrag.js";
 
 export class BoardScene extends Phaser.Scene {
   preload() {
@@ -118,6 +119,7 @@ export class BoardScene extends Phaser.Scene {
     refreshUnits(this);
     createHud(this);
     createStatsPanel(this);
+    setupCameraDrag(this);
   }
 
     update(time, delta) {
