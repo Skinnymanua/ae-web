@@ -1,4 +1,4 @@
-import { TILE_SIZE, BOARD_OFFSET_Y } from "../constants.js";
+import { TILE_SIZE, BOARD_OFFSET_Y, DEPTH } from "../constants.js";
 
 /** Draws the tile grid and wires each tile's click handler. Populates scene.tileSprites. */
 /** Draws the tile grid and wires each tile's click handler. Populates scene.tileSprites. */
@@ -108,6 +108,10 @@ export function showCursor(scene, x, y, textureKey) {
 
   const sprite = scene.add.sprite(cx, cy, textureKey, 0);
   sprite.setDisplaySize(size, size);
+  // See constants.js DEPTH - must render above units (render/units.js recreates
+  // unit sprites on nearly every action, which would otherwise re-climb above a
+  // depthless cursor, same underlying issue as the earlier stats-bar layering fix).
+  sprite.setDepth(DEPTH.CURSOR);
   scene.selectedTileHighlight = sprite;
 }
 

@@ -32,6 +32,7 @@ export const HUD_ICON = { LEVEL: 3, ATTACK: 0, PDEF: 1, MDEF: 2 };
 export const DEPTH = {
   TILES: 0,
   UNITS: 10,
+  CURSOR: 15, // selection/preview/attack-target cursor (render/tiles.js showCursor) - must sit above the unit it's marking
   ACTION_BAR: 20,
   STATS_BARS: 30, // top stats bar (ui/statsPanel.js) + bottom bar (ui/bottomBar.js)
   DIALOG: 40,
