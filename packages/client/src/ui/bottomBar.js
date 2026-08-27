@@ -1,4 +1,4 @@
-/**
+	/**
  * Bottom bar — loosely ported from StatusBarRenderer.java, which drew the
  * currently-hovered tile (with its defence bonus) plus population and gold along
  * the bottom edge. We don't show population here (not asked for), and there's no
@@ -14,12 +14,11 @@
  * tile/gold/turn info, but a right-aligned "End Turn ▶" label plus a click
  * anywhere on the bar triggers the end-turn confirm flow.
  */
-import { TILE_SIZE, DEPTH } from "../constants.js";
+import { TILE_SIZE } from "../constants.js";
 import { showConfirm } from "./dialogs.js";
 import { clearHighlights } from "../render/tiles.js";
 import { refreshUnits } from "../render/units.js";
 import { refreshStatsPanel } from "./statsPanel.js";
-import { animateHpChanges } from "../render/hpChange.js";
 
 export const BOTTOM_BAR_HEIGHT = 44;
 const BAR_HEIGHT = BOTTOM_BAR_HEIGHT;
@@ -31,7 +30,6 @@ export function createBottomBar(scene) {
   const barY = scene.cameras.main.height - BAR_HEIGHT;
   const container = scene.add.container(0, barY);
   container.setScrollFactor(0);
-  container.setDepth(DEPTH.HUD);
 
   const bg = scene.add
     .rectangle(0, 0, barWidth, BAR_HEIGHT, 0x1a1a1a, 0.85)
@@ -42,16 +40,15 @@ export function createBottomBar(scene) {
   bg.on("pointerdown", () => {
     if (scene.modalOpen || scene.animating || scene.actionBarOpen) return;
     showConfirm(scene, "End your turn?", () => {
-      const result = scene.game_.endTurn();
+      scene.game_.endTurn();
       scene.selectedUnitId = null;
       clearHighlights(scene);
+      refreshUnits(scene);
       updateBottomBarEconomy(scene);
-      animateHpChanges(scene, result.hpChanges, () => {
-        refreshUnits(scene);
-        refreshStatsPanel(scene);
-      });
+      refreshStatsPanel(scene);
     });
   });
+
   // Right-hand zone visually reads as the End Turn button, set off from the
   // info section by a thin divider.
   const zoneX = barWidth - END_TURN_ZONE_WIDTH;

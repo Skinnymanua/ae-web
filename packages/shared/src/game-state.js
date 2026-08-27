@@ -17,7 +17,7 @@ import {
   getMovementPointCost,
 } from "./movement.js";
 import { canAttack, canCounter, applyAttack } from "./combat-resolution.js";
-import { calcIncome, canBuy, getUnitPrice, canOccupy, resolveCapture, nextTurn, isTeamAlive, checkTeamDestroy } from "./turn.js";
+import { calcIncome, canBuy, getUnitPrice, canOccupy, resolveCapture, nextTurn, isTeamAlive } from "./turn.js";
 
 export const DEFAULT_RULE = {
   castleIncome: 100,
@@ -328,34 +328,11 @@ export class GameState {
     return unit;
   }
 
-  /**
-   * Ends the current team's turn, advances to the next living team, applies
-   * terrain heal + castle siege damage (see turn.js's nextTurn), removes any
-   * units that died from it, runs the team-destroy check for affected teams,
-   * and grants the new current team its income.
-   *
-   * Returns the hp-change/destroy events too (same shape as attack()'s
-   * result) so the client can animate them — see ui HpChangeAnimator port.
-   */
+  /** Ends the current team's turn, advances to the next living team, grants income. */
   endTurn() {
-    const result = nextTurn(this, this.units);
-
-    if (result.destroyedUnitIds.length) {
-      const affectedTeams = new Set(
-        result.destroyedUnitIds.map((id) => this.units.find((u) => u.id === id)?.team).filter((t) => t !== undefined)
-      );
-      const remaining = this.units.filter((u) => !result.destroyedUnitIds.includes(u.id));
-      this.units.length = 0;
-      this.units.push(...remaining);
-      this._syncTileRefs();
-      const mapInfo = this._mapInfo();
-      for (const team of affectedTeams) {
-        checkTeamDestroy(this, this.units, mapInfo, team);
-      }
-    }
-
+    nextTurn(this, this.units);
     this.collectIncome(this.currentTeam);
-    return { currentTeam: this.currentTeam, ...result };
+    return this.currentTeam;
   }
 
   isCurrentTeam(team) {

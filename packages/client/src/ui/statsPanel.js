@@ -9,7 +9,7 @@
  * Right column top-to-bottom: Level / Magic strength (magic defence) / Move (max
  * tiles per move).
  */
-import { HUD_ICON, STAT_ICON, TILE_SIZE, BOARD_OFFSET_Y, DEPTH } from "../constants.js";
+import { HUD_ICON, STAT_ICON, TILE_SIZE, BOARD_OFFSET_Y } from "../constants.js";
 import {
   getEffectiveAttack,
   getEffectivePhysicalDefence,
@@ -93,7 +93,6 @@ export function createStatsPanel(scene) {
 
   container.setVisible(false);
   container.setScrollFactor(0);
-  container.setDepth(DEPTH.HUD);
   scene.statsPanel = { container, texts, portrait: null, head: null, centerX };
   scene.statsPanelUnitId = null;
 }

@@ -1,9 +1,6 @@
-import { TILE_SIZE, BOARD_OFFSET_Y, DEPTH } from "../constants.js";
+import { TILE_SIZE, BOARD_OFFSET_Y } from "../constants.js";
 
-// Pixels of pointer movement (in screen space) below which a pointerdown→pointerup
-// on a tile still counts as a click rather than the start of a camera drag.
-const BOARD_DRAG_CLICK_THRESHOLD = 6;
-
+/** Draws the tile grid and wires each tile's click handler. Populates scene.tileSprites. */
 /** Draws the tile grid and wires each tile's click handler. Populates scene.tileSprites. */
 export function drawTileGrid(scene, onTileClick) {
   scene.tileSprites = [];
@@ -18,15 +15,7 @@ export function drawTileGrid(scene, onTileClick) {
       );
       sprite.setDisplaySize(TILE_SIZE, TILE_SIZE);
       sprite.setInteractive();
-      // Fires on pointerup rather than pointerdown, and only when the pointer
-      // barely moved since it went down — lets the board's click-drag camera
-      // pan (see render/camera.js's setupBoardDragScroll) coexist with tile
-      // clicks: a drag pans the camera without also selecting/acting on
-      // whatever tile the pointer happened to land on.
-      sprite.on("pointerup", () => {
-        if (scene.boardDragDistance > BOARD_DRAG_CLICK_THRESHOLD) return;
-        onTileClick(x, y);
-      });
+      sprite.on("pointerdown", () => onTileClick(x, y));
       scene.tileSprites[x].push(sprite);
     }
   }
@@ -95,7 +84,6 @@ export function highlightSelectedTile(scene, x, y) {
 
   const sprite = scene.add.sprite(cx, cy, "cursor_normal", 0);
   sprite.setDisplaySize(size, size);
-  sprite.setDepth(DEPTH.BOARD + 1); // above tiles, below units
   scene.selectedTileHighlight = sprite;
 }
 

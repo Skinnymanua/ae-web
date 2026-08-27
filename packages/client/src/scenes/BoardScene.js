@@ -6,7 +6,6 @@ import mapData from "../sample-map.json";
 
 import { drawTileGrid, updateSelectedTileHighlight } from "../render/tiles.js";
 import { refreshUnits, animateUnits } from "../render/units.js";
-import { setupBoardDragScroll } from "../render/camera.js";
 import { createHud } from "../ui/hud.js";
 import { createStatsPanel } from "../ui/statsPanel.js";
 import { onTileClick } from "../input/boardInput.js";
@@ -73,10 +72,6 @@ export class BoardScene extends Phaser.Scene {
       frameWidth: 11,
       frameHeight: 11,
     });
-    this.load.spritesheet("chars_large", "/images/chars_large.png", {
-      frameWidth: 8,
-      frameHeight: 11,
-    });
   }
 
   create() {
@@ -119,7 +114,6 @@ export class BoardScene extends Phaser.Scene {
     refreshUnits(this);
     createHud(this);
     createStatsPanel(this);
-    setupBoardDragScroll(this);
   }
 
     update(time, delta) {
