@@ -9,6 +9,7 @@ import {
   highlightSelectedTile,
   clearSelectedTileHighlight,
   addHighlight,
+  showCursor,
 } from "../render/tiles.js";
 
 /** Shows a unit's stats and rings its tile — the one place both stay in sync. */
@@ -90,6 +91,7 @@ function handleAttackTargetClick(scene, x, y) {
   const target = scene.game_.getUnitAt(x, y);
 
   if (target && scene.game_.canAttack(attacker.id, target.id)) {
+    showCursor(scene, x, y, "cursor_attack");
     scene.game_.attack(attacker.id, target.id);
     scene.attackTargetMode = false;
     clearHighlights(scene);
@@ -200,12 +202,15 @@ function handleActingUnitClick(scene, x, y) {
 }
 
 /** Shows the path to (x, y) in red on top of the existing yellow movable-range
- * highlight, and remembers it as the pending target for the confirming click. */
+ * highlight, and remembers it as the pending target for the confirming click.
+ * Also marks the target tile with the square+cross cursor (distinct from the
+ * plain square used for an ordinary tile click/selection — see render/tiles.js). */
 function previewMovePath(scene, unit, x, y) {
   const path = scene.game_.getMovePath(unit.id, x, y);
   scene.pendingMoveTarget = { x, y };
   clearPathPreview(scene);
   scene.pathPreviewRects = path.map((step) => addHighlight(scene, step.x, step.y, 0xdd4444, 0.5));
+  showCursor(scene, x, y, "cursor_move_preview");
 }
 
 /** Removes just the red path-preview overlay, leaving the yellow movable-range

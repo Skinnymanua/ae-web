@@ -55,6 +55,22 @@ export class BoardScene extends Phaser.Scene {
       frameWidth: 26,
       frameHeight: 26,
     });
+    // Bespoke (not from the original) — square-with-cross cursor for the
+    // move-path preview target (see input/boardInput.js's previewMovePath's
+    // two-click confirm flow). Not new art: this sheet is cursor_normal.png's
+    // square-bracket frames with cursor_move_target.png's cross composited on
+    // top of each — both existing, previously-unused assets already in the repo.
+    this.load.spritesheet("cursor_move_preview", "/images/cursor_move_preview.png", {
+      frameWidth: 26,
+      frameHeight: 26,
+    });
+    // Existing but previously unwired asset — ring cursor for attack-target
+    // selection (attackTargetMode). 3 frames, not the usual 2 — see
+    // updateSelectedTileHighlight's pulse, which just mods by frame count.
+    this.load.spritesheet("cursor_attack", "/images/cursor_attack.png", {
+      frameWidth: 40,
+      frameHeight: 41,
+    });
     // Ported from android/assets/images/chars_small.png — FontRenderer's small digit
     // font (12 frames of 6x7; 0-9 are the digits, used for the bottom-left HP number).
     this.load.spritesheet("chars_small", "/images/chars_small.png", {
