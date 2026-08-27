@@ -100,6 +100,7 @@ export class BoardScene extends Phaser.Scene {
 
     // --- interaction state (read/written by input/boardInput.js and ui/actionBar.js) ---
     this.selectedUnitId = null;
+    this.pendingMoveTarget = null;
     this.buyMode = false;
     this.pendingBuyUnitIndex = null;
     this.animating = false;
@@ -110,6 +111,7 @@ export class BoardScene extends Phaser.Scene {
     this.attackTargetMode = false;
     this._pendingAttacker = null;
     this.highlightRects = [];
+    this.pathPreviewRects = [];
     this.unitSprites = {};
     this.headSprites = {};
     this.actionBarContainer = null;

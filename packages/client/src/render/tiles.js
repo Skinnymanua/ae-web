@@ -51,6 +51,12 @@ export function refreshTileTexture(scene, x, y) {
 export function clearHighlights(scene) {
   for (const rect of scene.highlightRects) rect.destroy();
   scene.highlightRects = [];
+  // The red move-path preview (input/boardInput.js) is tracked separately from
+  // the yellow movable-range highlights so it can be redrawn on its own without
+  // disturbing the range — but every existing clearHighlights() call site expects
+  // a full "wipe the board's highlight state" reset, so it's cleared here too.
+  for (const rect of scene.pathPreviewRects ?? []) rect.destroy();
+  scene.pathPreviewRects = [];
 }
 
 /** Adds one semi-transparent highlight square at board position (x, y) and tracks it for later clearing. */

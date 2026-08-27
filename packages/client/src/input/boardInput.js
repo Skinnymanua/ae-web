@@ -8,6 +8,7 @@ import {
   highlightPositionSet,
   highlightSelectedTile,
   clearSelectedTileHighlight,
+  addHighlight,
 } from "../render/tiles.js";
 
 /** Shows a unit's stats and rings its tile — the one place both stay in sync. */
@@ -60,6 +61,7 @@ export function handleActionBarCancelClick(scene) {
   const reselectForMove = () => {
     unit.currentMovementPoint = origin.movementPoint;
     scene.selectedUnitId = unit.id;
+    scene.pendingMoveTarget = null;
     const { positions } = scene.game_.getMovablePositions(unit.id);
     clearHighlights(scene);
     highlightPositionSet(scene, positions, 0xffcc33, 0.45);
@@ -145,6 +147,7 @@ function handleUnitSelectionClick(scene, x, y) {
   }
   
   scene.selectedUnitId = clickedUnit.id;
+  scene.pendingMoveTarget = null;
   const { positions } = scene.game_.getMovablePositions(clickedUnit.id);
   clearHighlights(scene);
   highlightPositionSet(scene, positions, 0xffcc33, 0.45);
@@ -159,6 +162,7 @@ function handleActingUnitClick(scene, x, y) {
     // confirm current position without moving — opens the action bar directly
     clearHighlights(scene);
     scene.selectedUnitId = null;
+    scene.pendingMoveTarget = null;
     selectUnitForStats(scene, selectedUnit);
     scene.actionOrigin = {
       x: selectedUnit.x,
@@ -173,30 +177,62 @@ function handleActingUnitClick(scene, x, y) {
   if (!clickedUnit) {
     const { positions } = scene.game_.getMovablePositions(selectedUnit.id);
     if (positions.has(`${x},${y}`)) {
-      const path = scene.game_.getMovePath(selectedUnit.id, x, y);
-      const origin = {
-        x: selectedUnit.x,
-        y: selectedUnit.y,
-        movementPoint: selectedUnit.currentMovementPoint,
-        path,
-      };
-      clearHighlights(scene);
-      scene.selectedUnitId = null;
-      animateUnitMove(scene, selectedUnit, path, () => {
-        scene.game_.moveUnit(selectedUnit.id, path);
-        refreshUnits(scene);
-        updateInfoText(scene);
-        selectUnitForStats(scene, selectedUnit); // selectedUnit.x/y are updated by moveUnit()
-        scene.actionOrigin = origin;
-        showActionBar(scene, selectedUnit, x, y);
-      });
+      // First click on a reachable tile previews the path in red and waits for
+      // a second click on that same tile to confirm — mirrors the "click twice"
+      // pattern already used for the acting unit's own tile above. A click on a
+      // *different* reachable tile re-previews there instead of confirming.
+      if (scene.pendingMoveTarget && scene.pendingMoveTarget.x === x && scene.pendingMoveTarget.y === y) {
+        confirmPendingMove(scene, selectedUnit, x, y);
+        return;
+      }
+
+      previewMovePath(scene, selectedUnit, x, y);
       return;
     }
   }
   
   // clicked an enemy, or an unreachable tile — just deselect
   scene.selectedUnitId = null;
+  scene.pendingMoveTarget = null;
   clearHighlights(scene);
   clearSelectedTileHighlight(scene);
   updateStatsPanel(scene, null);
+}
+
+/** Shows the path to (x, y) in red on top of the existing yellow movable-range
+ * highlight, and remembers it as the pending target for the confirming click. */
+function previewMovePath(scene, unit, x, y) {
+  const path = scene.game_.getMovePath(unit.id, x, y);
+  scene.pendingMoveTarget = { x, y };
+  clearPathPreview(scene);
+  scene.pathPreviewRects = path.map((step) => addHighlight(scene, step.x, step.y, 0xdd4444, 0.5));
+}
+
+/** Removes just the red path-preview overlay, leaving the yellow movable-range
+ * highlight (a separate tracked set — see render/tiles.js) untouched. */
+function clearPathPreview(scene) {
+  for (const rect of scene.pathPreviewRects ?? []) rect.destroy();
+  scene.pathPreviewRects = [];
+}
+
+function confirmPendingMove(scene, selectedUnit, x, y) {
+  const path = scene.game_.getMovePath(selectedUnit.id, x, y);
+  const origin = {
+    x: selectedUnit.x,
+    y: selectedUnit.y,
+    movementPoint: selectedUnit.currentMovementPoint,
+    path,
+  };
+  clearHighlights(scene);
+  clearPathPreview(scene);
+  scene.selectedUnitId = null;
+  scene.pendingMoveTarget = null;
+  animateUnitMove(scene, selectedUnit, path, () => {
+    scene.game_.moveUnit(selectedUnit.id, path);
+    refreshUnits(scene);
+    updateInfoText(scene);
+    selectUnitForStats(scene, selectedUnit); // selectedUnit.x/y are updated by moveUnit()
+    scene.actionOrigin = origin;
+    showActionBar(scene, selectedUnit, x, y);
+  });
 }
