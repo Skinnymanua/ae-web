@@ -91,17 +91,42 @@ function handleAttackTargetClick(scene, x, y) {
   const target = scene.game_.getUnitAt(x, y);
 
   if (target && scene.game_.canAttack(attacker.id, target.id)) {
-    showCursor(scene, x, y, "cursor_attack");
-    scene.game_.attack(attacker.id, target.id);
-    scene.attackTargetMode = false;
-    clearHighlights(scene);
-    finishUnitAction(scene, attacker);
-  } else {
-    // invalid target — back out to the action bar rather than force a finish
-    scene.attackTargetMode = false;
-    clearHighlights(scene);
-    showActionBar(scene, attacker, attacker.x, attacker.y);
+    // First click on a valid target previews it (circle cursor + its stats) and
+    // waits for a second click on that same target to confirm — mirrors the
+    // move-path two-click confirm above. A click on a *different* valid target
+    // re-previews there instead of confirming.
+    if (scene.pendingAttackTarget === target.id) {
+      confirmPendingAttack(scene, attacker, target);
+      return;
+    }
+    previewAttackTarget(scene, target);
+    return;
   }
+
+  // invalid target — back out to the action bar rather than force a finish
+  scene.attackTargetMode = false;
+  scene.pendingAttackTarget = null;
+  clearHighlights(scene);
+  selectUnitForStats(scene, attacker);
+  showActionBar(scene, attacker, attacker.x, attacker.y);
+}
+
+/** Marks a valid attack target with the circle cursor and shows its stats,
+ * without resolving the attack yet — remembers it as the pending target for
+ * the confirming click. */
+function previewAttackTarget(scene, target) {
+  scene.pendingAttackTarget = target.id;
+  showCursor(scene, target.x, target.y, "cursor_attack");
+  updateStatsPanel(scene, target);
+}
+
+function confirmPendingAttack(scene, attacker, target) {
+  scene.game_.attack(attacker.id, target.id);
+  scene.attackTargetMode = false;
+  scene.pendingAttackTarget = null;
+  clearHighlights(scene);
+  clearSelectedTileHighlight(scene);
+  finishUnitAction(scene, attacker);
 }
 
 function handleBuyPlacementClick(scene, x, y) {
