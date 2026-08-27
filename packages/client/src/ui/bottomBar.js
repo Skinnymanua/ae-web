@@ -1,4 +1,4 @@
-	/**
+/**
  * Bottom bar — loosely ported from StatusBarRenderer.java, which drew the
  * currently-hovered tile (with its defence bonus) plus population and gold along
  * the bottom edge. We don't show population here (not asked for), and there's no
@@ -19,6 +19,7 @@ import { showConfirm } from "./dialogs.js";
 import { clearHighlights } from "../render/tiles.js";
 import { refreshUnits } from "../render/units.js";
 import { refreshStatsPanel } from "./statsPanel.js";
+import { animateHpChanges } from "../render/hpChange.js";
 
 export const BOTTOM_BAR_HEIGHT = 44;
 const BAR_HEIGHT = BOTTOM_BAR_HEIGHT;
@@ -40,15 +41,16 @@ export function createBottomBar(scene) {
   bg.on("pointerdown", () => {
     if (scene.modalOpen || scene.animating || scene.actionBarOpen) return;
     showConfirm(scene, "End your turn?", () => {
-      scene.game_.endTurn();
+      const result = scene.game_.endTurn();
       scene.selectedUnitId = null;
       clearHighlights(scene);
-      refreshUnits(scene);
       updateBottomBarEconomy(scene);
-      refreshStatsPanel(scene);
+      animateHpChanges(scene, result.hpChanges, () => {
+        refreshUnits(scene);
+        refreshStatsPanel(scene);
+      });
     });
   });
-
   // Right-hand zone visually reads as the End Turn button, set off from the
   // info section by a thin divider.
   const zoneX = barWidth - END_TURN_ZONE_WIDTH;
