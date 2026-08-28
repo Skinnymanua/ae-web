@@ -14,7 +14,7 @@
  * tile/gold/turn info, but a right-aligned "End Turn ▶" label plus a click
  * anywhere on the bar triggers the end-turn confirm flow.
  */
-import { TILE_SIZE, DEPTH } from "../constants.js";
+import { DEPTH } from "../constants.js";
 import { showConfirm } from "./dialogs.js";
 import { clearHighlights } from "../render/tiles.js";
 import { refreshUnits } from "../render/units.js";
@@ -27,7 +27,10 @@ const PREVIEW_SIZE = 36;
 const END_TURN_ZONE_WIDTH = 100;
 
 export function createBottomBar(scene) {
-  const barWidth = scene.game_.width * TILE_SIZE;
+  // Fixed to the camera's actual viewport width, not the map's - see
+  // statsPanel.js's createStatsPanel for the identical issue/fix (this bar
+  // is pinned on-screen too, via setScrollFactor(0) below).
+  const barWidth = scene.cameras.main.width;
   const barY = scene.cameras.main.height - BAR_HEIGHT;
   const container = scene.add.container(0, barY);
   container.setScrollFactor(0);

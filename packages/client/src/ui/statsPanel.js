@@ -9,7 +9,7 @@
  * Right column top-to-bottom: Level / Magic strength (magic defence) / Move (max
  * tiles per move).
  */
-import { HUD_ICON, STAT_ICON, TILE_SIZE, BOARD_OFFSET_Y, DEPTH, PHYSICAL_ATTACK_COLOR, MAGIC_ATTACK_COLOR } from "../constants.js";
+import { HUD_ICON, STAT_ICON, BOARD_OFFSET_Y, DEPTH, PHYSICAL_ATTACK_COLOR, MAGIC_ATTACK_COLOR } from "../constants.js";
 import { getUnitSpriteKey } from "../render/unitTexture.js";
 import {
   getEffectiveAttack,
@@ -55,7 +55,13 @@ function addStatRow(scene, container, graphics, x, y, key, iconSheet, iconFrame,
 }
 
 export function createStatsPanel(scene) {
-  const barWidth = scene.game_.width * TILE_SIZE;
+  // Fixed to the camera's actual viewport width, not the map's - this bar is
+  // pinned on-screen (setScrollFactor(0) below), so its own width has to
+  // match what's actually visible, not how many tiles wide the loaded map
+  // happens to be. The two only coincided by chance on the original 10-wide
+  // sample map; any wider or narrower map (e.g. battle-test-map.json's 21
+  // tiles) stretched or shrank every cell/stat position along with it.
+  const barWidth = scene.cameras.main.width;
   const container = scene.add.container(0, 0);
 
   const g = scene.add.graphics();

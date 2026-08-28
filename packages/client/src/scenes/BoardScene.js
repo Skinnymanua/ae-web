@@ -1,8 +1,8 @@
 import Phaser from "phaser";
-import { GameState, instantiateUnit } from "@ae/shared/src/game-state.js";
+import { GameState } from "@ae/shared/src/game-state.js";
 import unitsData from "@ae/shared/data/units.json";
 import tilesData from "@ae/shared/data/tiles.json";
-import mapData from "../sample-map.json";
+import mapData from "../battle-test-map.json";
 
 import { drawTileGrid, updateSelectedTileHighlight } from "../render/tiles.js";
 import { refreshUnits, animateUnits } from "../render/units.js";
@@ -129,13 +129,11 @@ export class BoardScene extends Phaser.Scene {
       ],
     });
 
-    // TEMP: manually spawn a team-1 enemy for testing attack — remove once
-    // real multi-team map/spawn logic exists.
-    const enemyDef = unitsData.units[0];
-    const enemyUnit = instantiateUnit(enemyDef, { team: 1, x: 2, y: 2 });
-    enemyUnit._tile = this.game_.getTileAt(2, 2);
-    this.game_.units.push(enemyUnit);
-    this.game_.players[1].population += enemyDef.occupancy;
+    // battle-test-map.json spawns every buyable unit type for both team 0 and
+    // team 1 in facing rows (see the map's own generation notes) - covers
+    // melee-closing-distance, ranged-units-firing-immediately (catapult's
+    // 3-7 range reaches across the gap without moving), and everything in
+    // between, so this no longer needs a manually-injected single enemy.
 
     // --- interaction state (read/written by input/boardInput.js and ui/actionBar.js) ---
     this.selectedUnitId = null;
