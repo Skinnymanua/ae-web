@@ -1,5 +1,6 @@
 import { animateUnitMove, refreshUnits } from "../render/units.js";
 import { showActionBar, finishUnitAction, clearActionBar } from "../ui/actionBar.js";
+import { showBuyMenu } from "../ui/dialogs.js";
 import { updateInfoText } from "../ui/hud.js";
 import { updateStatsPanel, refreshStatsPanel } from "../ui/statsPanel.js";
 import { updateBottomBarTile } from "../ui/bottomBar.js";
@@ -155,6 +156,17 @@ function handleUnitSelectionClick(scene, x, y) {
     // that path never sets scene.selectedUnitId for handleActingUnitClick to catch.
     clearHighlights(scene);
     clearSelectedTileHighlight(scene);
+
+    // An unoccupied castle the current team owns is a shortcut straight into
+    // the shop — no need to march a unit onto it first and dig through the
+    // action bar. Once any unit (friendly or not) sits on the tile, this
+    // shortcut steps aside: a king there still gets buy via the action bar
+    // (see ui/actionBar.js's canBuyHere), any other unit gets no purchase
+    // option at all.
+    const tile = scene.game_.getTileAt(x, y);
+    if (tile?.castle && tile.team === scene.game_.currentTeam) {
+      showBuyMenu(scene);
+    }
     return;
   }
 
