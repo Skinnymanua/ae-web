@@ -27,6 +27,15 @@ export class BoardScene extends Phaser.Scene {
         frameHeight: 24,
       });
     }
+    // Existing but previously unwired assets - AvailableUnitList draws every
+    // portrait in the original's unit-store list on top of getBigCircleTexture(0);
+    // used by ui/dialogs.js's buy-menu portrait strip. Each sheet is 2 frames side
+    // by side (createFrames(sheet, 2, 1) in the original's ResourceManager) - frame
+    // 0 is the normal ring, frame 1 is the pressed/selected ring (see CircleButton's
+    // isPressed()||isHeld() ? 1 : 0). Native frame sizes (32x33 / 20x21) come
+    // straight from the PNG dimensions (64x33 / 40x21) divided by 2 columns.
+    this.load.spritesheet("circle_big", "/images/circle_big.png", { frameWidth: 32, frameHeight: 33 });
+    this.load.spritesheet("circle_small", "/images/circle_small.png", { frameWidth: 20, frameHeight: 21 });
     this.load.spritesheet("heads", "/images/units/heads.png", {
       frameWidth: 13,
       frameHeight: 12,

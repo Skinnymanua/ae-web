@@ -22,6 +22,15 @@ export const STAT_ICON = { HP: 7, MOVE: 4 };
 // just "HP "/"XP " text prefixes.
 export const HUD_ICON = { LEVEL: 3, ATTACK: 0, PDEF: 1, MDEF: 2 };
 
+// Exact colors from ResourceManager: color_physical_attack / color_magic_attack.
+// The original (UnitStoreDialog/RightPanelRenderer) has no separate "magic
+// attack" stat slot - there's one Attack label whose text color switches
+// between these two depending on the unit's attackType. Any UI showing attack
+// should follow that: one value, color-coded - not a second physical/magic
+// attack column.
+export const PHYSICAL_ATTACK_COLOR = "#e30075";
+export const MAGIC_ATTACK_COLOR = "#0000ff";
+
 // Explicit render-layer ordering. Without setDepth(), Phaser falls back to
 // creation order — that broke down because refreshUnits() (render/units.js)
 // destroys and recreates every unit sprite on nearly every action (move, buy,

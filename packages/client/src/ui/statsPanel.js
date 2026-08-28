@@ -9,7 +9,7 @@
  * Right column top-to-bottom: Level / Magic strength (magic defence) / Move (max
  * tiles per move).
  */
-import { HUD_ICON, STAT_ICON, TILE_SIZE, BOARD_OFFSET_Y, DEPTH } from "../constants.js";
+import { HUD_ICON, STAT_ICON, TILE_SIZE, BOARD_OFFSET_Y, DEPTH, PHYSICAL_ATTACK_COLOR, MAGIC_ATTACK_COLOR } from "../constants.js";
 import {
   getEffectiveAttack,
   getEffectivePhysicalDefence,
@@ -25,13 +25,10 @@ const ICON_SIZE = 14;
 const PILL_WIDTH = 74;
 const PILL_HEIGHT = 20;
 
-// Exact colors from ResourceManager: color_physical_attack / color_magic_attack.
-const PHYSICAL_ATTACK_COLOR = "#e30075";
-const MAGIC_ATTACK_COLOR = "#0000ff";
-
 const CELL_BG = 0x232838;
 const PILL_BG = 0x3a4258;
 const BADGE_COLORS = { hp: 0xe0a83a, attack: 0x2b2b2b, pdef: 0xc0348a, level: 0xe8e4d8, mdef: 0xe0842a, move: 0xe8b13a };
+
 
 function addStatRow(scene, container, graphics, x, y, key, iconSheet, iconFrame, align) {
   const badgeX = align === "left" ? x + BADGE_RADIUS : x - BADGE_RADIUS;
