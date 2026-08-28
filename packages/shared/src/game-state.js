@@ -294,6 +294,11 @@ export class GameState {
     return income;
   }
 
+  /** Whether `team` currently has a living commander on the board. */
+  hasLivingCommander(team) {
+    return this.units.some((u) => u.team === team && u.isCommander);
+  }
+
   canBuyUnit(unitDefIndex, team) {
     const unitDef = this.unitDefs.find((u) => u.index === unitDefIndex);
     const commander = this.units.find((u) => u.team === team && u.isCommander);

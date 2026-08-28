@@ -157,7 +157,27 @@ export function createPurchaseStrip(scene, opts) {
     badge.setDisplaySize(portraitSize - 4, portraitSize - 4);
     const sprite = scene.add.sprite(px + portraitSize / 2, py + portraitSize / 2, item.textureKey, item.frameIndex);
     sprite.setDisplaySize(portraitSize - 6, portraitSize - 6);
-    stripContainer.add([badge, sprite]);
+    // Optional per-item affordability hint (dialogs.js sets this from
+    // canBuyUnit) - purely visual, doesn't affect click handling at all.
+    if (item.dimmed) {
+      sprite.setAlpha(0.4);
+      badge.setAlpha(0.6);
+    }
+    const parts = [badge, sprite];
+    if (item.headFrame !== null && item.headFrame !== undefined) {
+      // Same relative box (7/24 across, 13/24 wide, 12/24 tall, anchored
+      // top-left) as render/units.js's on-board head overlay, just scaled to
+      // the sprite's own display box instead of a board tile.
+      const spriteBoxSize = portraitSize - 6; // matches sprite's own setDisplaySize above
+      const spriteLeft = px + portraitSize / 2 - spriteBoxSize / 2;
+      const spriteTop = py + portraitSize / 2 - spriteBoxSize / 2;
+      const head = scene.add.image(spriteLeft + (spriteBoxSize * 7) / 24, spriteTop, "heads", item.headFrame);
+      head.setOrigin(0, 0);
+      head.setDisplaySize((spriteBoxSize * 13) / 24, (spriteBoxSize * 12) / 24);
+      if (item.dimmed) head.setAlpha(0.4);
+      parts.push(head);
+    }
+    stripContainer.add(parts);
 
     entries.push({ item, badge });
   });

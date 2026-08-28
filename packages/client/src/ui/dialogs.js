@@ -1,4 +1,4 @@
-	import unitsData from "@ae/shared/data/units.json";
+import unitsData from "@ae/shared/data/units.json";
 import unitNames from "@ae/shared/data/unit-names.json";
 import unitDescriptions from "@ae/shared/data/unit-descriptions.json";
 import { highlightPositionSet, clearHighlights } from "../render/tiles.js";
@@ -122,7 +122,20 @@ export function showBuyMenu(scene) {
   scene.modalOpen = true;
   const team = scene.game_.currentTeam;
 
-  const affordable = unitsData.units.filter((def) => scene.game_.canBuyUnit(def.index, team));
+  // Every roster unit gets listed regardless of whether the player can currently
+  // afford it - only skeleton/crystal (scenario/summoned types, never meant to
+  // be purchasable at all) are excluded here. Affordability is checked
+  // per-unit in selectUnit() below instead, to grey out the price/Buy button
+  // rather than hide the unit entirely - so the player can still see what's
+  // coming up, not just what they can afford right now.
+  // Commander is the one exception: while a living commander already exists,
+  // buying another isn't "not affordable yet" (something gold can fix), it's
+  // just not available at all until the current one dies - showing it dimmed
+  // every single turn regardless would be noise, not useful foresight, so it's
+  // excluded from the listing entirely in that case (see hasLivingCommander).
+  const listed = unitsData.units.filter(
+    (def) => !def.isSkeleton && !def.isCrystal && (!def.isCommander || !scene.game_.hasLivingCommander(team))
+  );
 
   const cam = scene.cameras.main;
   const panelWidth = Math.min(340, cam.width - 20);
@@ -131,7 +144,7 @@ export function showBuyMenu(scene) {
   // the original Android app's horizontally-swipeable unit picker (see the
   // reference screenshot) and sidesteps a wrapping grid's layout/hit-testing
   // fragility entirely, since row height - and everything below it - is now a
-  // fixed constant regardless of how many units are affordable.
+  // fixed constant regardless of how many units are listed.
   const portraitSize = 40;
   const portraitGap = 6;
   const stripHeight = portraitSize + 8;
@@ -150,7 +163,7 @@ export function showBuyMenu(scene) {
     lineSpacing: descLineSpacing,
   });
   let maxDescLines = 1;
-  for (const def of affordable) {
+  for (const def of listed) {
     measure.setText(unitDescriptions[def.index] ?? "");
     maxDescLines = Math.max(maxDescLines, measure.getWrappedText().length);
   }
@@ -181,8 +194,8 @@ export function showBuyMenu(scene) {
   container.add(bg);
   drawDialogBorder(scene, container, panelWidth, panelHeight);
 
-  if (affordable.length === 0) {
-    const noneText = scene.add.text(16, 16, "No units you can afford right now.", {
+  if (listed.length === 0) {
+    const noneText = scene.add.text(16, 16, "No units available.", {
       fontSize: "13px",
       color: "#dd8888",
       wordWrap: { width: panelWidth - 32 },
@@ -277,21 +290,34 @@ export function showBuyMenu(scene) {
     moveText.setText(String(def.movementPoint));
     descText.setText(unitDescriptions[def.index] ?? "");
 
+    // Affordability (gold, population capacity, team-alive) is checked
+    // per-unit here rather than at listing time, so an out-of-reach unit
+    // still shows its stats/description - only actually buying it is blocked.
+    const canBuy = scene.game_.canBuyUnit(def.index, team);
+    goldGroup.text.setColor(canBuy ? "#ffdd44" : "#dd4444");
+
     buyText.off("pointerdown");
-    buyText.on("pointerdown", () => {
-      strip.destroy();
-      scene.modalOpen = false;
-      container.destroy();
-      scene.pendingBuyUnitIndex = def.index;
-      scene.buyMode = true;
-      clearHighlights(scene);
-      highlightPositionSet(
-        scene,
-        scene.game_.getBuyPositions(team).map((p2) => `${p2.x},${p2.y}`),
-        0x44ddaa,
-        0.4
-      );
-    });
+    if (canBuy) {
+      buyText.setColor("#44dd88");
+      buyText.setInteractive();
+      buyText.on("pointerdown", () => {
+        strip.destroy();
+        scene.modalOpen = false;
+        container.destroy();
+        scene.pendingBuyUnitIndex = def.index;
+        scene.buyMode = true;
+        clearHighlights(scene);
+        highlightPositionSet(
+          scene,
+          scene.game_.getBuyPositions(team).map((p2) => `${p2.x},${p2.y}`),
+          0x44ddaa,
+          0.4
+        );
+      });
+    } else {
+      buyText.setColor("#666677");
+      buyText.disableInteractive();
+    }
   }
 
   const strip = createPurchaseStrip(scene, {
@@ -303,7 +329,21 @@ export function showBuyMenu(scene) {
     width: stripVisibleWidth,
     portraitSize,
     portraitGap,
-    items: affordable.map((def) => ({ id: def.index, textureKey: `unit_sheet_${team}`, frameIndex: def.index, def })),
+    items: listed.map((def) => ({
+      id: def.index,
+      textureKey: `unit_sheet_${team}`,
+      frameIndex: def.index,
+      def,
+      dimmed: !scene.game_.canBuyUnit(def.index, team),
+      // Commander's body sprite is intentionally headless in the source art -
+      // see render/units.js's on-board equivalent and statsPanel.js's stats-bar
+      // portrait, both of which layer a separate team-colored head on top only
+      // for isCommander units. unit.head isn't tracked per-instance anywhere in
+      // this port (always frame 0 - a separate, pre-existing gap), so this uses
+      // the same frame-0 fallback for consistency rather than inventing a
+      // different convention just for the shop.
+      headFrame: def.isCommander ? 0 : null,
+    })),
     onSelect: (item) => selectUnit(item.def),
   });
 
@@ -313,5 +353,5 @@ export function showBuyMenu(scene) {
     container.destroy();
   });
 
-  strip.select(affordable[0].index);
+  strip.select(listed[0].index);
 }
