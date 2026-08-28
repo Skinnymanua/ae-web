@@ -10,6 +10,7 @@
  * tiles per move).
  */
 import { HUD_ICON, STAT_ICON, TILE_SIZE, BOARD_OFFSET_Y, DEPTH, PHYSICAL_ATTACK_COLOR, MAGIC_ATTACK_COLOR } from "../constants.js";
+import { getUnitSpriteKey } from "../render/unitTexture.js";
 import {
   getEffectiveAttack,
   getEffectivePhysicalDefence,
@@ -109,7 +110,8 @@ export function updateStatsPanel(scene, unit) {
 
   const cx = panel.centerX;
   const cy = BAR_HEIGHT / 2;
-  panel.portrait = scene.add.sprite(cx, cy, `unit_sheet_${unit.team}`, unit.unitIndex);
+  const { key: portraitKey, frame: portraitFrame } = getUnitSpriteKey(unit.unitIndex, unit.team);
+  panel.portrait = scene.add.sprite(cx, cy, portraitKey, portraitFrame);
   panel.portrait.setDisplaySize(PORTRAIT_SIZE - 12, PORTRAIT_SIZE - 12);
   panel.container.add(panel.portrait);
 

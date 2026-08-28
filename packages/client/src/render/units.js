@@ -1,5 +1,6 @@
 import { TILE_SIZE, BOARD_OFFSET_Y, DEPTH } from "../constants.js";
 import { getMaxHp } from "@ae/shared/src/combat-resolution.js";
+import { getUnitSpriteKey, isStandaloneUnitTexture } from "./unitTexture.js";
 
 const FRAMES_PER_ROW = 19; // unit count — matches ResourceManager's texture_size derivation
 
@@ -22,12 +23,8 @@ export function refreshUnits(scene) {
     const topLeftX = unit.x * TILE_SIZE;
     const topLeftY = unit.y * TILE_SIZE + BOARD_OFFSET_Y;
 
-    const sprite = scene.add.sprite(
-      topLeftX + TILE_SIZE / 2,
-      topLeftY + TILE_SIZE / 2,
-      `unit_sheet_${unit.team}`,
-      unit.unitIndex
-    );
+    const { key: spriteKey, frame: spriteFrame } = getUnitSpriteKey(unit.unitIndex, unit.team);
+    const sprite = scene.add.sprite(topLeftX + TILE_SIZE / 2, topLeftY + TILE_SIZE / 2, spriteKey, spriteFrame);
     sprite.setDisplaySize(TILE_SIZE, TILE_SIZE);
     sprite.setTint(unit.standby ? 0x888888 : 0xffffff);
     sprite.setData("unitIndex", unit.unitIndex);
@@ -76,7 +73,7 @@ export function animateUnits(scene, elapsedMs) {
   for (const sprite of Object.values(scene.unitSprites)) {
     if (sprite.getData("standby")) continue;
     const unitIndex = sprite.getData("unitIndex");
-    sprite.setFrame(frame * FRAMES_PER_ROW + unitIndex);
+    sprite.setFrame(isStandaloneUnitTexture(unitIndex) ? frame : frame * FRAMES_PER_ROW + unitIndex);
   }
 }
 

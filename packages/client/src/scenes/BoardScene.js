@@ -43,6 +43,13 @@ export class BoardScene extends Phaser.Scene {
     // frames (1, 6 horizontal; 3, 4 vertical) get stretched to fill the gap
     // between corners, the four corner frames are drawn at native size.
     this.load.spritesheet("border", "/images/border.png", { frameWidth: 16, frameHeight: 16 });
+    // Mermaid/Druid (units.json indices 19/20) came from a different source
+    // than the rest of the roster - no per-team-color unit_sheet_N.png variant
+    // exists for either, just one standalone sprite each. See
+    // render/unitTexture.js for how these get resolved instead of the usual
+    // unit_sheet_${team} lookup.
+    this.load.spritesheet("mermaid", "/images/units/mermaid.png", { frameWidth: 24, frameHeight: 25 });
+    this.load.spritesheet("druid", "/images/units/druid.png", { frameWidth: 24, frameHeight: 25 });
     this.load.spritesheet("heads", "/images/units/heads.png", {
       frameWidth: 13,
       frameHeight: 12,

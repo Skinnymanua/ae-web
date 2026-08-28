@@ -75,6 +75,39 @@
       "isCrystal": false
     },
     {
+      "index": 19,
+      "price": 200,
+      "occupancy": 1,
+      "maxHp": 100,
+      "attack": 40,
+      "attackType": 0,
+      "physicalDefence": 0,
+      "magicDefence": 0,
+      "movementPoint": 4,
+      "abilities": [
+        {
+          "id": 1,
+          "name": "FIGHTER_OF_THE_SEA"
+        },
+        {
+          "id": 13,
+          "name": "SON_OF_THE_SEA"
+        }
+      ],
+      "growth": {
+        "hp": 0,
+        "attack": 10,
+        "physicalDefence": 5,
+        "magicDefence": 5,
+        "movement": 0
+      },
+      "minAttackRange": 1,
+      "maxAttackRange": 1,
+      "isCommander": false,
+      "isSkeleton": false,
+      "isCrystal": false
+    },
+    {
       "index": 1,
       "price": 250,
       "occupancy": 1,
@@ -440,6 +473,30 @@
       },
       "minAttackRange": 1,
       "maxAttackRange": 1,
+      "isCommander": false,
+      "isSkeleton": false,
+      "isCrystal": false
+    },
+    {
+      "index": 20,
+      "price": 600,
+      "occupancy": 3,
+      "maxHp": 100,
+      "attack": 40,
+      "attackType": 1,
+      "physicalDefence": 15,
+      "magicDefence": 15,
+      "movementPoint": 4,
+      "abilities": [],
+      "growth": {
+        "hp": 0,
+        "attack": 10,
+        "physicalDefence": 5,
+        "magicDefence": 5,
+        "movement": 0
+      },
+      "minAttackRange": 1,
+      "maxAttackRange": 2,
       "isCommander": false,
       "isSkeleton": false,
       "isCrystal": false

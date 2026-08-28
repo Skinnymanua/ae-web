@@ -3,6 +3,7 @@ import unitNames from "@ae/shared/data/unit-names.json";
 import unitDescriptions from "@ae/shared/data/unit-descriptions.json";
 import { highlightPositionSet, clearHighlights } from "../render/tiles.js";
 import { createPurchaseStrip } from "./purchaseStrip.js";
+import { getUnitSpriteKey } from "../render/unitTexture.js";
 import { DEPTH, HUD_ICON, STAT_ICON, PHYSICAL_ATTACK_COLOR, MAGIC_ATTACK_COLOR } from "../constants.js";
 
 // Shared sizing for every icon+value pair in this panel. A single fixed icon
@@ -329,21 +330,24 @@ export function showBuyMenu(scene) {
     width: stripVisibleWidth,
     portraitSize,
     portraitGap,
-    items: listed.map((def) => ({
-      id: def.index,
-      textureKey: `unit_sheet_${team}`,
-      frameIndex: def.index,
-      def,
-      dimmed: !scene.game_.canBuyUnit(def.index, team),
-      // Commander's body sprite is intentionally headless in the source art -
-      // see render/units.js's on-board equivalent and statsPanel.js's stats-bar
-      // portrait, both of which layer a separate team-colored head on top only
-      // for isCommander units. unit.head isn't tracked per-instance anywhere in
-      // this port (always frame 0 - a separate, pre-existing gap), so this uses
-      // the same frame-0 fallback for consistency rather than inventing a
-      // different convention just for the shop.
-      headFrame: def.isCommander ? 0 : null,
-    })),
+    items: listed.map((def) => {
+      const { key: textureKey, frame: frameIndex } = getUnitSpriteKey(def.index, team);
+      return {
+        id: def.index,
+        textureKey,
+        frameIndex,
+        def,
+        dimmed: !scene.game_.canBuyUnit(def.index, team),
+        // Commander's body sprite is intentionally headless in the source art -
+        // see render/units.js's on-board equivalent and statsPanel.js's stats-bar
+        // portrait, both of which layer a separate team-colored head on top only
+        // for isCommander units. unit.head isn't tracked per-instance anywhere in
+        // this port (always frame 0 - a separate, pre-existing gap), so this uses
+        // the same frame-0 fallback for consistency rather than inventing a
+        // different convention just for the shop.
+        headFrame: def.isCommander ? 0 : null,
+      };
+    }),
     onSelect: (item) => selectUnit(item.def),
   });
 
