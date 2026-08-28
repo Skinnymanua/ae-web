@@ -112,9 +112,19 @@ export function showActionBar(scene, unit, x, y) {
     otherActions.push({
       frame: ACTION_ICON.BUY,
       onClick: () => {
+        // Deliberately no finishUnitAction here - opening the shop isn't
+        // itself a turn-ending action, and neither is buying: the original
+        // engine's own Buy button just does setState(STATE_SELECT) +
+        // showDialog("store"), nothing else - the king is never marked
+        // standby by this. clearActionBar leaves both scene.selectedUnitId
+        // and scene.actionBarUnitId null (selectedUnitId was already null
+        // going into this action bar - see confirmPendingMove/
+        // handleActingUnitClick), so whether the player cancels out of the
+        // shop or completes a purchase, the king is simply left as an
+        // ordinary not-yet-acted unit: fully movable/attackable if clicked
+        // again, exactly like before Buy was ever clicked.
         clearActionBar(scene);
         showBuyMenu(scene, x, y);
-        finishUnitAction(scene, unit);
       },
     });
   }

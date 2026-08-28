@@ -354,6 +354,23 @@ export class GameState {
     return unit;
   }
 
+  /** Shared builder for the not-yet-purchased "as if spawned here" unit both
+   * getSpawnMovablePositions and getSpawnMovePath below simulate against -
+   * kept as one place so the two stay in sync on what a purchased unit's
+   * stats actually look like pre-existence. */
+  _spawnTempUnit(unitDefIndex, x, y, team) {
+    const unitDef = this.unitDefs.find((u) => u.index === unitDefIndex);
+    return {
+      id: "__pending_purchase__",
+      team,
+      x,
+      y,
+      currentMovementPoint: unitDef.movementPoint,
+      abilities: unitDef.abilities,
+      isCrystal: unitDef.isCrystal,
+    };
+  }
+
   /**
    * Movement options for a not-yet-purchased unit as if it had just spawned
    * at castle (x, y) - lets the buy UI show the same movable/attack
@@ -370,20 +387,26 @@ export class GameState {
    * find tiles the new unit could actually reach.
    */
   getSpawnMovablePositions(unitDefIndex, x, y, team) {
-    const unitDef = this.unitDefs.find((u) => u.index === unitDefIndex);
-    const tempUnit = {
-      id: "__pending_purchase__",
-      team,
-      x,
-      y,
-      currentMovementPoint: unitDef.movementPoint,
-      abilities: unitDef.abilities,
-      isCrystal: unitDef.isCrystal,
-    };
+    const tempUnit = this._spawnTempUnit(unitDefIndex, x, y, team);
     const board = this._board();
     const { movable, moveMark } = createMovablePositions(board, tempUnit, { game: this });
     const extendedAttack = computeExtendedAttackPositions(board, tempUnit, movable);
     return { movable, moveMark, extendedAttack };
+  }
+
+  /**
+   * Step-by-step path a not-yet-purchased unit would walk from castle (x, y)
+   * to (destX, destY) - the same shape GameState#getMovePath returns for a
+   * real unit, computed the same way getSpawnMovablePositions is. Used
+   * purely to drive the walk animation when a purchase can't land on the
+   * castle tile itself (see input/boardInput.js's handleBuyPlacementClick);
+   * must be computed before the unit actually exists, since afterward it
+   * would just block its own starting tile.
+   */
+  getSpawnMovePath(unitDefIndex, x, y, team, destX, destY) {
+    const tempUnit = this._spawnTempUnit(unitDefIndex, x, y, team);
+    const { moveMark } = createMovablePositions(this._board(), tempUnit, { game: this });
+    return createMovePath(this._board(), tempUnit, moveMark, destX, destY);
   }
 
   /**

@@ -93,12 +93,23 @@ export function showConfirm(scene, message, onYes, onNo) {
   const noText = scene.add.text(20, 25, "[ No ]", { fontSize: "16px", color: "#dd4444" }).setScrollFactor(0).setInteractive();
   container.add([bg, text, yesText, noText]);
 
-  yesText.on("pointerdown", () => {
+  // pointerup (not pointerdown), with stopPropagation - matches the action
+  // bar's own icons (see ui/actionBar.js's showActionBar comment on this
+  // exact issue). A pointerdown here fires and destroys `container`
+  // synchronously; the pointerup half of the same click/tap then finds
+  // nothing left at this screen position and falls through to whatever tile
+  // sprite is underneath (tiles listen on pointerup - see
+  // render/tiles.js), silently triggering a bogus board click right after
+  // the dialog closes. Using pointerup + stopPropagation consumes that same
+  // event here instead of letting it leak through.
+  yesText.on("pointerup", (pointer, localX, localY, event) => {
+    event.stopPropagation();
     scene.modalOpen = false;
     container.destroy();
     onYes?.();
   });
-  noText.on("pointerdown", () => {
+  noText.on("pointerup", (pointer, localX, localY, event) => {
+    event.stopPropagation();
     scene.modalOpen = false;
     container.destroy();
     onNo?.();
@@ -207,7 +218,9 @@ export function showBuyMenu(scene, castleX, castleY) {
     });
     container.add(noneText);
     const closeText = scene.add.text(16, panelHeight - 28, "[ Close ]", { fontSize: "13px", color: "#dd4444" }).setScrollFactor(0).setInteractive();
-    closeText.on("pointerdown", () => {
+    // pointerup + stopPropagation - see yesText/noText above for why.
+    closeText.on("pointerup", (pointer, localX, localY, event) => {
+      event.stopPropagation();
       scene.modalOpen = false;
       container.destroy();
     });
@@ -305,11 +318,23 @@ export function showBuyMenu(scene, castleX, castleY) {
     const canBuy = canAfford && scene.game_.canPlacePurchase(def.index, castleX, castleY, team);
     goldGroup.text.setColor(canAfford ? "#ffdd44" : "#dd4444");
 
-    buyText.off("pointerdown");
+    buyText.off("pointerup");
     if (canBuy) {
       buyText.setColor("#44dd88");
       buyText.setInteractive();
-      buyText.on("pointerdown", () => {
+      // pointerup + stopPropagation - see yesText/noText's comment near the
+      // top of this file for why this matters here specifically: this is
+      // the handler that enters scene.buyMode (occupied castle) or spawns
+      // the unit outright (empty castle), and container.destroy() runs
+      // synchronously inside it. A leaked pointerdown-then-pointerup pair
+      // reaching the board tile underneath right after would immediately
+      // misfire as a bogus placement click / acting-unit click on whatever
+      // tile happens to be under the dialog, at exactly the moment
+      // scene.buyMode is freshly true - which reads as the purchase
+      // "flashing and cancelling itself" with the highlights clearing and
+      // nothing actually bought.
+      buyText.on("pointerup", (pointer, localX, localY, event) => {
+        event.stopPropagation();
         strip.destroy();
         scene.modalOpen = false;
         container.destroy();
@@ -353,7 +378,9 @@ export function showBuyMenu(scene, castleX, castleY) {
     onSelect: (item) => selectUnit(item.def),
   });
 
-  cancelText.on("pointerdown", () => {
+  // pointerup + stopPropagation - see buyText's comment above for why.
+  cancelText.on("pointerup", (pointer, localX, localY, event) => {
+    event.stopPropagation();
     strip.destroy();
     scene.modalOpen = false;
     container.destroy();

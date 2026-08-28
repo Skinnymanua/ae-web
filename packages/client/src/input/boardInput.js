@@ -4,6 +4,7 @@ import { showBuyMenu } from "../ui/dialogs.js";
 import { updateInfoText } from "../ui/hud.js";
 import { updateStatsPanel, refreshStatsPanel } from "../ui/statsPanel.js";
 import { updateBottomBarTile } from "../ui/bottomBar.js";
+import { TILE_SIZE, BOARD_OFFSET_Y } from "../constants.js";
 import {
   clearHighlights,
   highlightPositionSet,
@@ -46,14 +47,15 @@ export function selectUnitForMovement(scene, unit) {
  * If the castle is occupied - only ever the king, since the buy button
  * itself is gated to that case, see ui/actionBar.js's canBuyHere - there's
  * nowhere to instantiate the unit yet: the tiles it could actually reach
- * from the castle (excluding the castle tile itself) are highlighted and
- * scene.buyMode waits for the player to pick one via handleBuyPlacementClick
- * below. dialogs.js's canPlacePurchase check already guarantees this set is
+ * from the castle (excluding the castle tile itself) are highlighted in
+ * yellow, with its extended attack range in red - the same move+attack
+ * highlighting any normal unit selection gets - and scene.buyMode waits for
+ * the player to pick a movable tile via handleBuyPlacementClick below. dialogs.js's canPlacePurchase check already guarantees this set is
  * non-empty before the Buy button is even clickable - a king with nowhere to
  * retreat makes every unit un-buyable at that castle, not just this click.
  */
 export function purchaseUnit(scene, unitDef, castleX, castleY, team) {
-  const { movable } = scene.game_.getSpawnMovablePositions(unitDef.index, castleX, castleY, team);
+  const { movable, extendedAttack } = scene.game_.getSpawnMovablePositions(unitDef.index, castleX, castleY, team);
   const castleKey = `${castleX},${castleY}`;
 
   if (movable.has(castleKey)) {
@@ -71,6 +73,7 @@ export function purchaseUnit(scene, unitDef, castleX, castleY, team) {
   scene.pendingBuyCastle = { x: castleX, y: castleY };
   clearHighlights(scene);
   highlightPositionSet(scene, movable, 0xffcc33, 0.45);
+  highlightPositionSet(scene, extendedAttack, 0xdd4444, 0.4);
 }
 
 export function onTileClick(scene, x, y) {
@@ -188,8 +191,15 @@ function confirmPendingAttack(scene, attacker, target) {
 /**
  * The placement click for a purchase that couldn't spawn directly on its
  * castle (see purchaseUnit) - (x, y) must be one of the tiles that were
- * highlighted, i.e. reachable from scene.pendingBuyCastle. On success the
- * unit is created already standing at (x, y) and goes straight to the
+ * highlighted, i.e. reachable from scene.pendingBuyCastle. The unit is
+ * created already standing at (x, y) - buyUnitAt places it there directly,
+ * gold spent up front, mirroring how the original engine's own two-layer
+ * unit stack lets it always target the castle tile and only reveals the
+ * commander again once the purchase walks off - but since this port has no
+ * such stacking, the walk itself is faked visually: the freshly rendered
+ * sprite is snapped back to the castle's pixel position and tweened along
+ * the same path getSpawnMovePath/purchaseUnit's highlight were based on,
+ * purely cosmetic since the unit's real state is already final. Ends on the
  * action bar, same as a unit whose real move just resolved - spawning here
  * *was* its move for the turn, so there's no leftover movement-mode
  * selection to offer.
@@ -197,28 +207,48 @@ function confirmPendingAttack(scene, attacker, target) {
 function handleBuyPlacementClick(scene, x, y) {
   const team = scene.game_.currentTeam;
   const castle = scene.pendingBuyCastle;
-  const unit =
-    scene.pendingBuyUnitIndex !== null && castle
-      ? scene.game_.buyUnitAt(scene.pendingBuyUnitIndex, team, castle.x, castle.y, x, y)
-      : null;
+  const unitDefIndex = scene.pendingBuyUnitIndex;
 
   scene.buyMode = false;
   scene.pendingBuyUnitIndex = null;
   scene.pendingBuyCastle = null;
   clearHighlights(scene);
 
+  if (unitDefIndex === null || !castle) return;
+
+  // Computed against the board as it stands right now - before the unit
+  // exists - since afterward it would just block its own starting tile.
+  const path = scene.game_.getSpawnMovePath(unitDefIndex, castle.x, castle.y, team, x, y);
+  const unit = scene.game_.buyUnitAt(unitDefIndex, team, castle.x, castle.y, x, y);
   if (!unit) return;
 
   refreshUnits(scene);
   updateInfoText(scene);
-  refreshStatsPanel(scene);
-  // No actionOrigin: unlike a real move, there's no walk-back path to
-  // reverse if the player hits the action bar's cancel icon - it just
-  // closes the bar (see handleActionBarCancelClick's `if (!unit || !origin)
-  // return;` guard) and leaves the unit standing where it was placed.
-  scene.actionOrigin = null;
-  selectUnitForStats(scene, unit);
-  showActionBar(scene, unit, x, y);
+
+  const finish = () => {
+    refreshStatsPanel(scene);
+    // No actionOrigin: unlike a real move, there's no walk-back path to
+    // reverse if the player hits the action bar's cancel icon - it just
+    // closes the bar (see handleActionBarCancelClick's `if (!unit || !origin)
+    // return;` guard) and leaves the unit standing where it was placed.
+    scene.actionOrigin = null;
+    selectUnitForStats(scene, unit);
+    showActionBar(scene, unit, x, y);
+  };
+
+  const sprite = scene.unitSprites[unit.id];
+  if (sprite && path.length > 0) {
+    sprite.x = castle.x * TILE_SIZE + TILE_SIZE / 2;
+    sprite.y = castle.y * TILE_SIZE + TILE_SIZE / 2 + BOARD_OFFSET_Y;
+    const head = scene.headSprites[unit.id];
+    if (head) {
+      head.x = castle.x * TILE_SIZE + (TILE_SIZE * 7) / 24;
+      head.y = castle.y * TILE_SIZE + BOARD_OFFSET_Y;
+    }
+    animateUnitMove(scene, unit, path, finish);
+  } else {
+    finish();
+  }
 }
 
 function handleUnitSelectionClick(scene, x, y) {
