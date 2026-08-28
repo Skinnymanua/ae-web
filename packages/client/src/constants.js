@@ -12,14 +12,21 @@ export const ACTION_ICON = { BUY: 0, OCCUPY: 1, ATTACK: 2, STANDBY: 5 };
 
 // Two more frames from that same sheet (heart, 4-way move arrows) aren't used by the
 // action bar itself but are the right icons for the top stats bar's HP/Move rows.
-export const STAT_ICON = { HP: 7, MOVE: 4 };
+// A third, frame 6 (8-pointed asterisk), was undocumented until confirmed against
+// the reference screenshot of the commercial reskin's buy menu: it's the magic-
+// defence icon there - a plain yellow asterisk, not HUD_ICON.MDEF's blue shield
+// below. That's the same reskin-vs-open-source divergence as the action bar's
+// compass layout and the portrait strip's CircleButton ring - use this one for
+// any magic-defence display that's meant to match the reskin, not HUD_ICON.MDEF.
+export const STAT_ICON = { HP: 7, MOVE: 4, MDEF: 6 };
 
 // Frame indices within icons_hud_battle.png (52x16 = 4 frames of 13x16).
 // Verified directly against RightPanelRenderer.java's drawInformation(): icon(3)
 // is drawn at the smallest y-offset (paired with the level row, closest to the
 // portrait), icon(0) pairs with attack, icon(1) with physical defence, icon(2)
-// with magic defence. HP and XP rows have no icon in the original at all —
-// just "HP "/"XP " text prefixes.
+// with magic defence (a blue shield - see STAT_ICON.MDEF above for the reskin's
+// asterisk variant instead). HP and XP rows have no icon in the original at all
+// — just "HP "/"XP " text prefixes.
 export const HUD_ICON = { LEVEL: 3, ATTACK: 0, PDEF: 1, MDEF: 2 };
 
 // Exact colors from ResourceManager: color_physical_attack / color_magic_attack.

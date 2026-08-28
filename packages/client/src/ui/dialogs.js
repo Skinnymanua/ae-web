@@ -49,6 +49,31 @@ function addIconValueRight(scene, container, y, iconSheet, iconFrame, fontSize, 
   return { text, updateGroup };
 }
 
+/**
+ * Draws the original's dialog-window frame - ported from BorderRenderer.
+ * drawBorder(), which BasicDialog (UnitStoreDialog's base class) uses for
+ * every dialog. Four fixed-size corner pieces (frames 0/2/5/7) plus four edge
+ * pieces (1/3/4/6) stretched to fill the gap between them - see border.png's
+ * load call in BoardScene.js for the frame layout. Assumes `container`
+ * already has a filled background rectangle sized (width, height) at (0,0);
+ * this only adds the frame on top of it.
+ */
+function drawDialogBorder(scene, container, width, height, borderSize = 16) {
+  const piece = (frameIndex, x, y, w, h) => {
+    const img = scene.add.image(x, y, "border", frameIndex).setOrigin(0, 0);
+    img.setDisplaySize(w, h);
+    container.add(img);
+  };
+  piece(0, 0, 0, borderSize, borderSize); // top-left corner
+  piece(1, borderSize, 0, width - borderSize * 2, borderSize); // top edge
+  piece(2, width - borderSize, 0, borderSize, borderSize); // top-right corner
+  piece(3, 0, borderSize, borderSize, height - borderSize * 2); // left edge
+  piece(4, width - borderSize, borderSize, borderSize, height - borderSize * 2); // right edge
+  piece(5, 0, height - borderSize, borderSize, borderSize); // bottom-left corner
+  piece(6, borderSize, height - borderSize, width - borderSize * 2, borderSize); // bottom edge
+  piece(7, width - borderSize, height - borderSize, borderSize, borderSize); // bottom-right corner
+}
+
 /** Simple modal Yes/No confirm box. Sets scene.modalOpen while shown, blocking board input. */
 export function showConfirm(scene, message, onYes, onNo) {
   scene.modalOpen = true;
@@ -88,7 +113,7 @@ export function showConfirm(scene, message, onYes, onNo) {
  * placement click is handled by input/boardInput.js's onTileClick.
  *
  * Ported to roughly match RightPanelRenderer/StatusBarRenderer's in-game unit-info
- * panel styling (icons_hud_battle for attack/pdef/mdef, icons_action for move,
+ * panel styling (icons_hud_battle for attack/pdef, icons_action for move/mdef,
  * icons_hud_status for population/price/attack-range) rather than the earlier
  * plain text list. Portrait-strip picker (vs. the original's vertical list) is
  * an intentional deviation for the web port's portrait-mode layout.
@@ -132,7 +157,7 @@ export function showBuyMenu(scene) {
   measure.destroy();
   const descBlockHeight = maxDescLines * (descFontSize + descLineSpacing);
 
-  const statY = 72;
+  const statY = 46;
   const descY = statY + 32;
   const buyY = descY + descBlockHeight + 12;
   const stripY = buyY + 30;
@@ -152,11 +177,9 @@ export function showBuyMenu(scene) {
   // .setScrollFactor(0) - don't rely on this call alone.
   container.setDepth(DEPTH.DIALOG);
 
-  const bg = scene.add
-    .rectangle(0, 0, panelWidth, panelHeight, 0x1a2038, 0.96)
-    .setOrigin(0, 0)
-    .setStrokeStyle(2, 0xffffff, 0.4);
+  const bg = scene.add.rectangle(0, 0, panelWidth, panelHeight, 0x1a2038, 0.96).setOrigin(0, 0);
   container.add(bg);
+  drawDialogBorder(scene, container, panelWidth, panelHeight);
 
   if (affordable.length === 0) {
     const noneText = scene.add.text(16, 16, "No units you can afford right now.", {
@@ -179,26 +202,35 @@ export function showBuyMenu(scene) {
   const nameText = scene.add.text(16, 14, "", { fontSize: "18px", color: "#ffffff", fontStyle: "bold" });
   container.add(nameText);
 
-  // Gold and population, right-aligned to the panel edge. updateGroup() is
-  // called from selectUnit() each time, so the icon always sits flush against
-  // whatever width the current value's text actually measures out to.
+  // Price, range, and population all on one row (matches UnitStoreDialog.java's
+  // hud_pane, which puts image_price/label_price, image_attack_range/
+  // label_attack_range, image_occupancy/label_occupancy side by side in a
+  // single Table row) - an earlier version of this port split range onto its
+  // own row below, which doesn't match either the original or the reference
+  // screenshot. Right-to-left chain, same reasoning as before: population's
+  // right edge is fixed to the panel edge, range's right edge is fixed to
+  // population's measured left edge, and price's right edge is fixed to
+  // range's - so the whole group shifts together and never overlaps
+  // regardless of how wide any individual value's text measures out to.
   const priceRowY = 22;
-  const goldGroup = addIconValueRight(scene, container, priceRowY, "icons_hud_status", 1, 14, "#ffdd44");
   const popGroup = addIconValueRight(scene, container, priceRowY, "icons_hud_status", 0, 14, "#ffffff", 14);
-
-  const rangeRowY = 46;
-  const rangeText = addIconValueLeft(scene, container, 16, rangeRowY, "icons_hud_status", 2, 13, "#ffffff");
+  const rangeGroup = addIconValueRight(scene, container, priceRowY, "icons_hud_status", 2, 13, "#ffffff");
+  const goldGroup = addIconValueRight(scene, container, priceRowY, "icons_hud_status", 1, 14, "#ffdd44");
 
   // Stats row: attack (single value, color-coded physical/magic - the
   // original has no separate magic-attack slot, see UnitStoreDialog.label_attack),
-  // move, physical defence, magic defence. All four share STAT_ICON_SIZE so the
+  // magic defence, physical defence, move. This order (not the naive atk/move/
+  // pdef/mdef row-major reading of the original's 2x2 Table grid - attack+move
+  // on row 1, pdef+mdef on row 2) matches the reference screenshot's actual
+  // single-row layout, which is from the commercial reskin, not the plain
+  // open-source UnitStoreDialog. All four share STAT_ICON_SIZE so the
   // icon-to-text gap is identical in every column.
   const statW = (panelWidth - 32) / 4;
   const statRowY = statY + 8;
   const atkText = addIconValueLeft(scene, container, 16 + statW * 0, statRowY, "icons_hud_battle", HUD_ICON.ATTACK, 14, "#88ee88");
-  const moveText = addIconValueLeft(scene, container, 16 + statW * 1, statRowY, "icons_action", STAT_ICON.MOVE, 14, "#ffffff");
+  const mdefText = addIconValueLeft(scene, container, 16 + statW * 1, statRowY, "icons_action", STAT_ICON.MDEF, 14, "#88ee88");
   const pdefText = addIconValueLeft(scene, container, 16 + statW * 2, statRowY, "icons_hud_battle", HUD_ICON.PDEF, 14, "#ffffff");
-  const mdefText = addIconValueLeft(scene, container, 16 + statW * 3, statRowY, "icons_hud_battle", HUD_ICON.MDEF, 14, "#ffffff");
+  const moveText = addIconValueLeft(scene, container, 16 + statW * 3, statRowY, "icons_action", STAT_ICON.MOVE, 14, "#ffffff");
 
   const descText = scene.add.text(16, descY, "", {
     fontSize: `${descFontSize}px`,
@@ -225,21 +257,24 @@ export function showBuyMenu(scene) {
   function selectUnit(def) {
     const name = unitNames[def.index] ?? `Unit #${def.index}`;
     nameText.setText(name);
-    // Right-to-left chain: gold's right edge is fixed to the panel; pop's
-    // right edge is fixed to gold's measured left edge plus a gap, so the
-    // pair never overlaps regardless of how many digits either value has.
-    const goldLeftEdge = goldGroup.updateGroup(def.price, panelWidth - 16);
-    popGroup.updateGroup(def.occupancy, goldLeftEdge - STAT_GROUP_GAP);
-    rangeText.setText(`${def.minAttackRange}-${def.maxAttackRange}`);
+    // Right-to-left chain: population's right edge is fixed to the panel;
+    // range's right edge is fixed to population's measured left edge; price's
+    // right edge is fixed to range's - so reading left-to-right the group
+    // always comes out price, range, population (matching the reference
+    // screenshot), and never overlaps regardless of how wide any one value's
+    // text measures out to.
+    const popLeftEdge = popGroup.updateGroup(def.occupancy, panelWidth - 16);
+    const rangeLeftEdge = rangeGroup.updateGroup(`${def.minAttackRange}-${def.maxAttackRange}`, popLeftEdge - STAT_GROUP_GAP);
+    goldGroup.updateGroup(def.price, rangeLeftEdge - STAT_GROUP_GAP);
     // units.json stores one attack value + an attackType flag (0 physical, 1
     // magic) - matching UnitStoreDialog.update(), that's a single Attack stat
     // whose text color switches between physical/magic, not two separate
     // stat slots.
     atkText.setText(String(def.attack));
     atkText.setColor(def.attackType === 0 ? PHYSICAL_ATTACK_COLOR : MAGIC_ATTACK_COLOR);
-    moveText.setText(String(def.movementPoint));
-    pdefText.setText(String(def.physicalDefence));
     mdefText.setText(String(def.magicDefence));
+    pdefText.setText(String(def.physicalDefence));
+    moveText.setText(String(def.movementPoint));
     descText.setText(unitDescriptions[def.index] ?? "");
 
     buyText.off("pointerdown");

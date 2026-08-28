@@ -36,6 +36,13 @@ export class BoardScene extends Phaser.Scene {
     // straight from the PNG dimensions (64x33 / 40x21) divided by 2 columns.
     this.load.spritesheet("circle_big", "/images/circle_big.png", { frameWidth: 32, frameHeight: 33 });
     this.load.spritesheet("circle_small", "/images/circle_small.png", { frameWidth: 20, frameHeight: 21 });
+    // Ported from BorderRenderer.java's drawBorder() - the dialog-window frame
+    // used throughout the original (UnitStoreDialog extends BasicDialog, which
+    // draws this). 8 frames of 16x16: top-left/top-edge/top-right corner+edge,
+    // left-edge/right-edge, bottom-left/bottom-edge/bottom-right - the two edge
+    // frames (1, 6 horizontal; 3, 4 vertical) get stretched to fill the gap
+    // between corners, the four corner frames are drawn at native size.
+    this.load.spritesheet("border", "/images/border.png", { frameWidth: 16, frameHeight: 16 });
     this.load.spritesheet("heads", "/images/units/heads.png", {
       frameWidth: 13,
       frameHeight: 12,
