@@ -1,3 +1,4 @@
+import Phaser from "phaser";
 import { ACTION_ICON, STAT_ICON, TILE_SIZE, BOARD_OFFSET_Y, DEPTH } from "../constants.js";
 import { clearHighlights, addHighlight, refreshTileTexture } from "../render/tiles.js";
 import { refreshUnits } from "../render/units.js";
@@ -59,7 +60,8 @@ export function enterAttackTargetMode(scene, unit, attackablePositions) {
 // commander on his own castle with no enemy in range gets buy on the RIGHT (not a
 // fixed slot), because attack isn't available to compete for it that turn.
 const RADIUS = TILE_SIZE * 0.95;
-const ICON_CLEARANCE = 22; // circle radius (20) + a small gap, for clamping to stay on-board
+const BUTTON_RADIUS = 20;
+const ICON_CLEARANCE = BUTTON_RADIUS + 2; // button radius + a small gap, for clamping to stay on-board
 const SLOT_OFFSET = {
   top: { x: 0, y: -RADIUS },
   topRight: { x: RADIUS * 0.7, y: -RADIUS * 0.7 },
@@ -153,8 +155,18 @@ export function showActionBar(scene, unit, x, y) {
     const targetX = Math.max(viewLeft, Math.min(viewRight, cx + offset.x));
     const targetY = Math.max(viewTop, Math.min(viewBottom, cy + offset.y));
 
-    const bg = scene.add.circle(cx, cy, 20, 0x222222, 0.9).setStrokeStyle(2, 0xffffff);
-    bg.setInteractive();
+    const bg = scene.add.circle(cx, cy, BUTTON_RADIUS, 0x222222, 0.9).setStrokeStyle(2, 0xffffff);
+    // Arc/Circle shapes' default setInteractive() (no explicit shape/callback)
+    // builds its hit area as a plain Rectangle sized to the object's bounding
+    // box, but that rectangle - like every Phaser hitArea - is anchored to the
+    // TOP-LEFT of the bounding box, ignoring the shape's own origin. An earlier
+    // pass at this fix used Circle(0, 0, BUTTON_RADIUS), assuming (0,0) meant
+    // "the shape's own center" - it doesn't; (0,0) is the top-left corner, so
+    // that put the hit-circle's center a full radius up-and-left of the actual
+    // button, which is worse than the original bug, not a fix of it. The
+    // correct center in that top-left-anchored space is (radius, radius) -
+    // matching Phaser's own docs example for a circular hit area.
+    bg.setInteractive(new Phaser.Geom.Circle(BUTTON_RADIUS, BUTTON_RADIUS, BUTTON_RADIUS), Phaser.Geom.Circle.Contains);
     const iconImg = scene.add.image(cx, cy, "icons_action", frame);
     iconImg.setDisplaySize(32, 32); // was 24 — too much padding inside the 40px circle
     // pointerup (not pointerdown) to match the tile sprites underneath (see

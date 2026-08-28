@@ -24,6 +24,12 @@ export function setupCameraDrag(scene) {
   let camStartY = 0;
 
   scene.input.on("pointerdown", (pointer) => {
+    // A modal dialog (showConfirm/showBuyMenu) or mid-animation state owns
+    // pointer input while active - same guard boardInput.js's onTileClick
+    // already uses. Without this, dragging over e.g. the buy menu's portrait
+    // strip also panned the board underneath it, since this is a scene-level
+    // listener that fires regardless of what's on top.
+    if (scene.modalOpen || scene.animating) return;
     dragging = false; // becomes true only once DRAG_THRESHOLD is crossed
     dragStartX = pointer.x;
     dragStartY = pointer.y;
@@ -33,6 +39,7 @@ export function setupCameraDrag(scene) {
 
   scene.input.on("pointermove", (pointer) => {
     if (!pointer.isDown) return;
+    if (scene.modalOpen || scene.animating) return;
 
     const dx = pointer.x - dragStartX;
     const dy = pointer.y - dragStartY;

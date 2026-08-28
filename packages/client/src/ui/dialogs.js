@@ -2,6 +2,7 @@
 import unitNames from "@ae/shared/data/unit-names.json";
 import unitDescriptions from "@ae/shared/data/unit-descriptions.json";
 import { highlightPositionSet, clearHighlights } from "../render/tiles.js";
+import { createPurchaseStrip } from "./purchaseStrip.js";
 import { DEPTH, HUD_ICON, STAT_ICON, PHYSICAL_ATTACK_COLOR, MAGIC_ATTACK_COLOR } from "../constants.js";
 
 // Shared sizing for every icon+value pair in this panel. A single fixed icon
@@ -139,6 +140,16 @@ export function showBuyMenu(scene) {
 
   const container = scene.add.container(cam.width / 2 - panelWidth / 2, cam.height / 2 - panelHeight / 2);
   container.setScrollFactor(0);
+  // ^ Container.setScrollFactor() only propagates to children already in the
+  // list at call time (there are none yet, right after creation) - it does
+  // NOT retroactively cover anything added to `container` later. Rendering
+  // still comes out correct either way (nested transforms compose fine), but
+  // Phaser's input hit-testing separately factors camera.scroll * the child's
+  // OWN scrollFactor, so any interactive element left at the default
+  // scrollFactor(1) silently drifts from where it's drawn by however far the
+  // camera has panned. Every interactive child added below (buyText,
+  // cancelText, the purchase strip's badges, ...) needs its own explicit
+  // .setScrollFactor(0) - don't rely on this call alone.
   container.setDepth(DEPTH.DIALOG);
 
   const bg = scene.add
@@ -154,7 +165,7 @@ export function showBuyMenu(scene) {
       wordWrap: { width: panelWidth - 32 },
     });
     container.add(noneText);
-    const closeText = scene.add.text(16, panelHeight - 28, "[ Close ]", { fontSize: "13px", color: "#dd4444" }).setInteractive();
+    const closeText = scene.add.text(16, panelHeight - 28, "[ Close ]", { fontSize: "13px", color: "#dd4444" }).setScrollFactor(0).setInteractive();
     closeText.on("pointerdown", () => {
       scene.modalOpen = false;
       container.destroy();
@@ -197,112 +208,19 @@ export function showBuyMenu(scene) {
   });
   container.add(descText);
 
-  const buyText = scene.add.text(16, buyY, "[ Buy ]", { fontSize: "14px", color: "#44dd88" }).setInteractive();
+  const buyText = scene.add.text(16, buyY, "[ Buy ]", { fontSize: "14px", color: "#44dd88" }).setScrollFactor(0).setInteractive();
   container.add(buyText);
   const cancelText = scene.add
     .text(panelWidth - 78, buyY, "[ Cancel ]", { fontSize: "14px", color: "#dd4444" })
+    .setScrollFactor(0)
     .setInteractive();
   container.add(cancelText);
 
-  // --- scrollable portrait strip ---
-  // container is at scene-space (containerX, containerY); the strip's clip
-  // rectangle and drag/wheel hit-zone need to be in that same scene space, not
-  // container-local coordinates, since Phaser hit-testing and masks both work
-  // in world/scene space.
+  // container is at scene-space (containerX, containerY); the strip needs that
+  // same scene space for its mask/hit-zone - see purchaseStrip.js's doc comment.
   const containerX = cam.width / 2 - panelWidth / 2;
   const containerY = cam.height / 2 - panelHeight / 2;
   const stripVisibleWidth = panelWidth - 32;
-
-  // Mask source must be a Graphics object, not a Rectangle Shape: Phaser's
-  // canvas renderer path for GeometryMask calls the mask source's renderCanvas
-  // with a trailing "allowClip" flag telling it to build a clip path instead of
-  // actually painting pixels - Graphics implements that branch, but Rectangle
-  // (and shapes generally) ignore the flag and just fillRect() as normal,
-  // painting an opaque block over the strip instead of clipping it. That was
-  // the actual cause of "no units show" - not a coordinate or z-order bug.
-  const stripMaskGraphics = scene.add.graphics();
-  stripMaskGraphics.setScrollFactor(0);
-  stripMaskGraphics.setVisible(false);
-  stripMaskGraphics.fillStyle(0xffffff);
-  stripMaskGraphics.fillRect(containerX + 16, containerY + stripY, stripVisibleWidth, stripHeight);
-  const stripMask = stripMaskGraphics.createGeometryMask();
-
-  const stripContainer = scene.add.container(16, stripY);
-  stripContainer.setMask(stripMask);
-  container.add(stripContainer);
-
-  const totalStripWidth = affordable.length * (portraitSize + portraitGap) - portraitGap;
-  const maxScroll = Math.max(0, totalStripWidth - stripVisibleWidth);
-  let scrollX = 0;
-
-  function applyScroll() {
-    stripContainer.x = 16 - scrollX;
-  }
-
-  // A dedicated invisible hit-zone (not the portraits themselves) drives both
-  // drag-to-scroll and wheel-to-scroll, so drags and wheel events work anywhere
-  // over the strip - not just when the pointer happens to start on a portrait.
-  const stripHitZone = scene.add
-    .rectangle(containerX + 16, containerY + stripY, stripVisibleWidth, stripHeight, 0x000000, 0)
-    .setOrigin(0, 0)
-    .setScrollFactor(0)
-    .setInteractive();
-  container.add(stripHitZone);
-
-  // Same click-vs-drag threshold pattern as input/cameraDrag.js: a press only
-  // becomes a scroll-drag once the pointer moves past DRAG_THRESHOLD, so a plain
-  // tap still reaches the portrait's own "pointerup" handler underneath.
-  const DRAG_THRESHOLD = 6;
-  let dragging = false;
-  let dragStartX = 0;
-  let scrollStartX = 0;
-
-  stripHitZone.on("pointerdown", (pointer) => {
-    dragging = false;
-    dragStartX = pointer.x;
-    scrollStartX = scrollX;
-  });
-  const endDrag = () => {
-    dragging = false;
-  };
-  scene.input.on("pointerup", endDrag);
-  scene.input.on("pointerupoutside", endDrag);
-
-  const onPointerMove = (pointer) => {
-    if (!pointer.isDown) return;
-    const dx = pointer.x - dragStartX;
-    if (!dragging) {
-      if (Math.abs(dx) < DRAG_THRESHOLD) return;
-      dragging = true;
-    }
-    scrollX = Math.max(0, Math.min(maxScroll, scrollStartX - dx));
-    applyScroll();
-  };
-  scene.input.on("pointermove", onPointerMove);
-
-  // The scene-level listeners above outlive this function call, so they must be
-  // removed explicitly on every close path (Buy or Cancel) - otherwise each time
-  // the buy menu is reopened it adds another set, leaking listeners that keep
-  // firing (harmlessly, but needlessly) after the menu that owns them is gone.
-  function cleanupStripListeners() {
-    scene.input.off("pointermove", onPointerMove);
-    scene.input.off("pointerup", endDrag);
-    scene.input.off("pointerupoutside", endDrag);
-  }
-
-  stripHitZone.on("wheel", (pointer, dx, dy) => {
-    scrollX = Math.max(0, Math.min(maxScroll, scrollX + dy));
-    applyScroll();
-  });
-
-  cancelText.on("pointerdown", () => {
-    cleanupStripListeners();
-    scene.modalOpen = false;
-    container.destroy();
-    stripMaskGraphics.destroy();
-  });
-
-  const portraits = [];
 
   function selectUnit(def) {
     const name = unitNames[def.index] ?? `Unit #${def.index}`;
@@ -324,16 +242,11 @@ export function showBuyMenu(scene) {
     mdefText.setText(String(def.magicDefence));
     descText.setText(unitDescriptions[def.index] ?? "");
 
-    for (const p of portraits) {
-      p.badge.setFrame(p.def.index === def.index ? 1 : 0);
-    }
-
     buyText.off("pointerdown");
     buyText.on("pointerdown", () => {
-      cleanupStripListeners();
+      strip.destroy();
       scene.modalOpen = false;
       container.destroy();
-      stripMaskGraphics.destroy();
       scene.pendingBuyUnitIndex = def.index;
       scene.buyMode = true;
       clearHighlights(scene);
@@ -346,30 +259,24 @@ export function showBuyMenu(scene) {
     });
   }
 
-  affordable.forEach((def, i) => {
-    const px = i * (portraitSize + portraitGap);
-    const py = 4;
-    // Plain invisible hit-area - the original has no per-item box; the ring
-    // itself (badge, below) is what conveys selection.
-    const pBg = scene.add.rectangle(px, py, portraitSize, portraitSize, 0x000000, 0).setOrigin(0, 0).setInteractive();
-    const sprite = scene.add.sprite(px + portraitSize / 2, py + portraitSize / 2, `unit_sheet_${team}`, def.index);
-    sprite.setDisplaySize(portraitSize - 6, portraitSize - 6);
-    // Circular badge behind the sprite - ported from CircleButton's LARGE type,
-    // which is what the portrait strip in the reference screenshot actually uses
-    // (not AvailableUnitList's plain always-frame-0 list row): frame 0 is the
-    // normal/empty ring, frame 1 is the pressed/selected ring - toggled in
-    // selectUnit() below.
-    const badge = scene.add.image(px + portraitSize / 2, py + portraitSize / 2, "circle_big", 0);
-    badge.setDisplaySize(portraitSize - 4, portraitSize - 4);
-    stripContainer.add([pBg, badge, sprite]);
-    // pointerup (not pointerdown), and skip if this press turned into a strip
-    // drag - same rationale as render/tiles.js's tile clicks vs camera drag.
-    pBg.on("pointerup", () => {
-      if (dragging) return;
-      selectUnit(def);
-    });
-    portraits.push({ def, bg: pBg, badge });
+  const strip = createPurchaseStrip(scene, {
+    parentContainer: container,
+    parentX: containerX,
+    parentY: containerY,
+    x: 16,
+    y: stripY,
+    width: stripVisibleWidth,
+    portraitSize,
+    portraitGap,
+    items: affordable.map((def) => ({ id: def.index, textureKey: `unit_sheet_${team}`, frameIndex: def.index, def })),
+    onSelect: (item) => selectUnit(item.def),
   });
 
-  selectUnit(affordable[0]);
+  cancelText.on("pointerdown", () => {
+    strip.destroy();
+    scene.modalOpen = false;
+    container.destroy();
+  });
+
+  strip.select(affordable[0].index);
 }
