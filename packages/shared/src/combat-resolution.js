@@ -15,7 +15,7 @@
  *     minAttackRange, maxAttackRange, abilities, unitCode, isCrystal }
  */
 
-import { ABILITY, getDamage, manhattanRange } from "./combat.js";
+import { ABILITY, STATUS, getDamage, manhattanRange, hasStatus, attachAttackStatus } from "./combat.js";
 import { checkTeamDestroy } from "./turn.js";
 
 const LEVEL_EXPERIENCE = [0, 100, 300, 600];
@@ -59,12 +59,19 @@ export function toCombatStats(unit) {
     maxHp: getMaxHp(unit),
     abilities: unit.abilities,
     unitCode: unit.unitCode,
+    status: unit.status, // read by combat.js's getAttackBonus for the INSPIRED bonus
   };
 }
 
 // --- Range / eligibility checks ---------------------------------------
 
+// Ported from Unit#getMinAttackRange/#getMaxAttackRange both returning 0 while
+// BLINDED - since canAttack/canCounter both route through isWithinRange (attacker
+// for the former, defender for the latter), a blinded unit can neither attack
+// nor counter until the blind wears off. A zero-width [0,0] range can never
+// match a positive distance to another tile, which is what actually disables it.
 export function isWithinRange(unit, x, y) {
+  if (hasStatus(unit, STATUS.BLINDED)) return false;
   const range = manhattanRange(unit, { x, y });
   return range >= unit.minAttackRange && range <= unit.maxAttackRange;
 }
@@ -149,6 +156,11 @@ export function resolveAttack(game, rule, attacker, defender) {
 
   defender.currentHp = Math.max(defender.currentHp - attackDamage, 0);
   events.push({ type: "ATTACK", attackerId: attacker.id, defenderId: defender.id, damage: attackDamage, counter: false });
+  // Ported from GameEventExecutor#onAttack calling UnitToolkit.attachAttackStatus
+  // right after applying damage - fires on every landed hit regardless of
+  // whether it killed, so a POISONER/BLINDER's status still attaches even on
+  // a blow that finishes the target off (harmless there, but matches source).
+  attachAttackStatus(attacker, defender);
 
   let counterDamage = null;
   if (defender.currentHp <= 0) {
@@ -170,6 +182,10 @@ export function resolveAttack(game, rule, attacker, defender) {
       });
       attacker.currentHp = Math.max(attacker.currentHp - counterDamage, 0);
       events.push({ type: "ATTACK", attackerId: defender.id, defenderId: attacker.id, damage: counterDamage, counter: true });
+      // Same on-hit status attachment as the initial attack above, roles
+      // swapped - a counter is a real hit too, so a defender who's also a
+      // POISONER/BLINDER can inflict its status right back on the attacker.
+      attachAttackStatus(defender, attacker);
 
       if (attacker.currentHp <= 0) {
         destroyedUnitIds.push(attacker.id);

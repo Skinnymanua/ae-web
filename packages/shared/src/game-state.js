@@ -18,7 +18,17 @@ import {
   posKey,
 } from "./movement.js";
 import { canAttack, canCounter, applyAttack } from "./combat-resolution.js";
-import { calcIncome, canBuy, getUnitPrice, canOccupy, resolveCapture, nextTurn, isTeamAlive, checkTeamDestroy } from "./turn.js";
+import {
+  calcIncome,
+  canBuy,
+  getUnitPrice,
+  canOccupy,
+  resolveCapture,
+  nextTurn,
+  isTeamAlive,
+  checkTeamDestroy,
+  applyAuraEffects,
+} from "./turn.js";
 
 export const DEFAULT_RULE = {
   castleIncome: 100,
@@ -73,6 +83,7 @@ export function instantiateUnit(unitDef, { team, x, y, id }) {
     abilities: unitDef.abilities,
     isCommander: unitDef.isCommander,
     isCrystal: unitDef.isCrystal,
+    status: null, // { type, remainingTurn } | null - see combat.js's STATUS/attachStatus
   };
 }
 
@@ -279,6 +290,22 @@ export class GameState {
     this.tileIndices[x][y] = newIndex;
     this._syncTileRefs();
     return true;
+  }
+
+  /**
+   * Marks unitId's turn as done and applies whatever aura it has (see
+   * turn.js's applyAuraEffects) to every unit within 2 tiles - ported from
+   * GameEventExecutor#onStandby, which runs this exact scan on EVERY unit
+   * going standby, not just aura-bearers (applyAuraEffects' own ability
+   * checks gate whether anything actually happens). This is the single
+   * place standby should be set from - the client used to just mutate
+   * unit.standby directly, which skipped the aura scan entirely.
+   */
+  standby(unitId) {
+    const unit = this.getUnit(unitId);
+    if (!unit) return;
+    unit.standby = true;
+    applyAuraEffects(this, this.units, unit);
   }
 
   canOccupy(unitId, x, y) {

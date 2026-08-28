@@ -19,7 +19,7 @@
  * module once it exists (Step 4 continued).
  */
 
-import { ABILITY } from "./combat.js";
+import { ABILITY, STATUS, hasStatus, isDebuffStatus, attachStatus, clearStatus, manhattanRange } from "./combat.js";
 import { getMaxHp } from "./combat-resolution.js";
 
 function hasAbility(unit, abilityId) {
@@ -222,8 +222,12 @@ function getTerrainHeal(game, unit, tile) {
   return heal;
 }
 
+// Ported from Unit#getMovementPoint returning a flat 1 while SLOWED, overriding
+// the unit's real movement stat entirely (not a reduction from it) - and
+// Unit#resetMovementPoint calling that status-aware getter, which is what this
+// mirrors for the per-turn reset.
 export function resetUnitForTurn(game, unit) {
-  unit.currentMovementPoint = unit.maxMovementPoint;
+  unit.currentMovementPoint = hasStatus(unit, STATUS.SLOWED) ? 1 : unit.maxMovementPoint;
   unit.standby = false;
 }
 
@@ -256,14 +260,89 @@ function getCastleSiegeChange(game, unit, tile) {
   return 0;
 }
 
+// Ported from Rule.POISON_DAMAGE. UNDEAD units are healed by poison instead of
+// hurt by it (OperationExecutor#onNextTurn: `if (UNDEAD) change += POISON_DAMAGE;
+// else change = -POISON_DAMAGE;`) - note the asymmetry: for everyone else poison
+// OVERRIDES whatever terrain heal/siege change was already computed for the turn
+// (poison suppresses passive healing entirely), but for UNDEAD it ADDS on top,
+// stacking with heal. See applyPoisonChange below for where this gets applied.
+const POISON_DAMAGE = 10;
+
+/**
+ * Combines poison with the terrain-heal/siege `baseChange` already computed
+ * for `unit`, per the override/add asymmetry described above. Does NOT touch
+ * unit.status - the caller ticks/clears that separately, after this turn's hp
+ * change has already been computed from the status as it stood coming in.
+ */
+function applyPoisonChange(unit, baseChange) {
+  const isPoisoned = hasStatus(unit, STATUS.POISONED) && unit.status.remainingTurn > 0;
+  if (!isPoisoned) return baseChange;
+  if (hasAbility(unit, ABILITY.UNDEAD)) return baseChange + POISON_DAMAGE;
+  return -POISON_DAMAGE;
+}
+
+/**
+ * Ported from GameEventExecutor#onNextTurn's per-unit status handling, run
+ * for each of the INCOMING team's own units alongside the hp-change loop
+ * below: a debuff (poison/slow/blind) clears outright if the unit is
+ * standing on a temple, otherwise its remainingTurn ticks down by one and
+ * clears once it goes negative. Mutates unit.status in place.
+ */
+function tickStatus(unit, tile) {
+  if (!unit.status) return;
+  if (tile.temple && isDebuffStatus(unit.status)) {
+    clearStatus(unit);
+    return;
+  }
+  unit.status.remainingTurn -= 1;
+  if (unit.status.remainingTurn < 0) clearStatus(unit);
+}
+
+/**
+ * Ported from GameEventExecutor#onStandby's aura scan: run whenever ANY unit
+ * goes standby (see GameState#standby), not just aura-bearers - the ability
+ * checks below gate whether anything actually happens. A unit with
+ * ATTACK_AURA inspires every ally within 2 tiles (+10 attack, see
+ * combat.js's getAttackBonus); SLOWING_AURA does the same to enemies
+ * (movement capped to 1 - see resetUnitForTurn above) unless they carry
+ * SLOWING_AURA themselves; REFRESH_AURA cleanses a debuff from any ally
+ * within range. Range is manhattan distance, not adjacency - "within 2
+ * tiles", matching PositionGenerator#createPositionsWithinRange(x, y, 0, 2).
+ * Mutates the affected units' .status in place.
+ */
+export function applyAuraEffects(game, units, unit) {
+  const hasAnyAura =
+    hasAbility(unit, ABILITY.ATTACK_AURA) || hasAbility(unit, ABILITY.SLOWING_AURA) || hasAbility(unit, ABILITY.REFRESH_AURA);
+  if (!hasAnyAura) return;
+
+  for (const target of units) {
+    if (target.id === unit.id || manhattanRange(unit, target) > 2) continue;
+    const targetIsEnemy = isEnemy(game, unit.team, target.team);
+
+    if (hasAbility(unit, ABILITY.ATTACK_AURA) && !targetIsEnemy) {
+      attachStatus(target, { type: STATUS.INSPIRED, remainingTurn: 0 });
+    }
+    if (hasAbility(unit, ABILITY.SLOWING_AURA) && targetIsEnemy && !hasAbility(target, ABILITY.SLOWING_AURA)) {
+      attachStatus(target, { type: STATUS.SLOWED, remainingTurn: 1 });
+    }
+    if (hasAbility(unit, ABILITY.REFRESH_AURA) && !targetIsEnemy && isDebuffStatus(target.status)) {
+      clearStatus(target);
+    }
+  }
+}
+
 /**
  * Advances to the next living team's turn, resetting the outgoing team's units,
- * then — for the INCOMING team's own units — applies terrain heal, plus castle
+ * then — for the INCOMING team's own units — applies terrain heal, castle
  * siege damage for any of them squatting on an enemy-owned castle (see
  * getCastleSiegeChange's note above for why this fires on the squatter's own
- * turn rather than OperationExecutor#onNextTurn's original schedule).
+ * turn rather than OperationExecutor#onNextTurn's original schedule), and
+ * poison damage (or healing, for UNDEAD) per applyPoisonChange above. Each
+ * affected unit's status (poison/slow/blind/inspire) then ticks down or
+ * clears via tickStatus, using the same "is this my own turn starting" gate
+ * as everything else in this loop.
  *
- * Mutates `game` and each affected unit's currentHp. Does NOT remove destroyed
+ * Mutates `game` and each affected unit's currentHp/status. Does NOT remove destroyed
  * units or run the team-destroy check — same division of responsibility as
  * combat-resolution.js's resolveAttack/applyAttack: this returns what happened
  * (hpChanges, destroyedUnitIds), and the caller (GameState#endTurn) is
@@ -273,10 +352,7 @@ function getCastleSiegeChange(game, unit, tile) {
  * @returns {{hpChanges: Array<{unitId, x, y, change}>, destroyedUnitIds: string[]}}
  */
 export function nextTurn(game, units, onNewRound) {
-  for (const unit of units) {
-    if (unit.team === game.currentTeam) resetUnitForTurn(game, unit);
-  }
-    do {
+  do {
     if (game.currentTeam < 3) {
       game.currentTeam++;
     } else {
@@ -286,25 +362,36 @@ export function nextTurn(game, units, onNewRound) {
   } while (!isTeamAlive(game, game.currentTeam));
   game.turn++;
 
-  // Hp changes run for the INCOMING team's own units only, after the switch
-  // above — this was previously bundled into resetUnitForTurn and run for the
-  // outgoing team before the switch, which made healing visibly land at the
-  // start of the next (often enemy) team's turn instead of at the start of
-  // the healed team's own turn, and never checked siege damage at all. Both
-  // terrain heal and castle siege now key off the SAME "is this my own turn
-  // starting" check — a unit on an enemy castle just gets 0 heal (per
-  // getTerrainHeal's own isEnemy gate) plus -50 siege instead.
+  // Movement/standby reset, hp changes (terrain heal, castle siege, poison),
+  // and status ticking all run for the INCOMING team's own units only, here
+  // after the switch above — the movement/standby reset used to run for the
+  // OUTGOING team just before the switch instead (see resetUnitForTurn's
+  // call site history), which was harmless for plain movement/standby alone
+  // (nothing reads either again until that team's own next turn regardless
+  // of which side of the switch the reset landed on) but broke SLOWED the
+  // moment an aura could apply it mid-round: the movement cap needs the
+  // status as it stands when the affected team's own turn actually starts,
+  // exactly like heal/siege/poison below already key off that same "is this
+  // my own turn starting" check.
   const hpChanges = [];
   const destroyedUnitIds = [];
   for (const unit of units) {
     if (unit.team !== game.currentTeam) continue;
+    resetUnitForTurn(game, unit);
     const tile = game.getTileAt(unit.x, unit.y);
-    const change = validateHpChange(unit, getTerrainHeal(game, unit, tile) + getCastleSiegeChange(game, unit, tile));
+    const baseChange = getTerrainHeal(game, unit, tile) + getCastleSiegeChange(game, unit, tile);
+    const change = validateHpChange(unit, applyPoisonChange(unit, baseChange));
     if (change !== 0) {
       unit.currentHp += change;
       hpChanges.push({ unitId: unit.id, x: unit.x, y: unit.y, change });
       if (unit.currentHp <= 0) destroyedUnitIds.push(unit.id);
     }
+    // Status ticks AFTER this turn's hp change is computed above - poison
+    // damage this turn uses remainingTurn as it stood BEFORE the decrement,
+    // matching the original's two-step split (OperationExecutor#onNextTurn
+    // computes hp_changes first; GameEventExecutor#onNextTurn's updateStatus()
+    // is a separate, later step for the same turn transition).
+    tickStatus(unit, tile);
   }
 
   return { hpChanges, destroyedUnitIds };

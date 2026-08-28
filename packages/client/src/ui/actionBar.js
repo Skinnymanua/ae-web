@@ -32,7 +32,11 @@ export function clearActionBar(scene) {
 
 /** Marks the unit's turn as done, closes the bar, and re-renders. */
 export function finishUnitAction(scene, unit) {
-  unit.standby = true;
+  // Routed through GameState#standby (not a direct unit.standby=true mutation)
+  // so the aura scan runs - see turn.js's applyAuraEffects: a nearby
+  // ATTACK_AURA/SLOWING_AURA/REFRESH_AURA holder needs every standby to
+  // trigger it, not just its own.
+  scene.game_.standby(unit.id);
   clearActionBar(scene);
   scene.selectedUnitId = null;
   scene.actionOrigin = null;

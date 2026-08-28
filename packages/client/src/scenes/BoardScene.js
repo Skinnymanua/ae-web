@@ -116,6 +116,15 @@ export class BoardScene extends Phaser.Scene {
       frameWidth: 8,
       frameHeight: 11,
     });
+    // Ported from android/assets/images/status.png — the four status-effect
+    // badges (4 frames of 7x9): blood drop (poison), asterisk (inspire), down
+    // arrow (slow), red eye (blind) — see render/units.js's STATUS_ICON_FRAME
+    // for the STATUS-constant-to-frame mapping (spritesheet order doesn't
+    // match combat.js's STATUS enum order, so this can't just be unit.status.type).
+    this.load.spritesheet("status", "/images/status.png", {
+      frameWidth: 7,
+      frameHeight: 9,
+    });
   }
 
   create() {

@@ -1,23 +1,38 @@
 import { TILE_SIZE, BOARD_OFFSET_Y, DEPTH } from "../constants.js";
 import { getMaxHp } from "@ae/shared/src/combat-resolution.js";
+import { STATUS } from "@ae/shared/src/combat.js";
 import { getUnitSpriteKey, isStandaloneUnitTexture } from "./unitTexture.js";
 
 const FRAMES_PER_ROW = 19; // unit count — matches ResourceManager's texture_size derivation
+
+// status.png's frame order (blood drop, asterisk, down arrow, red eye) doesn't
+// match combat.js's STATUS enum order (POISONED=0, SLOWED=1, INSPIRED=2,
+// BLINDED=3), hence this explicit map rather than using status.type directly.
+const STATUS_ICON_FRAME = {
+  [STATUS.POISONED]: 0,
+  [STATUS.INSPIRED]: 1,
+  [STATUS.SLOWED]: 2,
+  [STATUS.BLINDED]: 3,
+};
+const STATUS_ICON_SIZE = TILE_SIZE / 3;
 
 // FontRenderer: schar_width/height = ts * 6/24, ts * 7/24 — scaled from a 24px-tile design.
 const SCHAR_WIDTH = (TILE_SIZE * 6) / 24;
 const SCHAR_HEIGHT = (TILE_SIZE * 7) / 24;
 
-/** Destroys and redraws every unit sprite (+ head overlay + HP number) from current game_ state. */
+/** Destroys and redraws every unit sprite (+ head overlay + HP number + status
+ * badge) from current game_ state. */
 export function refreshUnits(scene) {
   for (const sprite of Object.values(scene.unitSprites)) sprite.destroy();
   for (const sprite of Object.values(scene.headSprites)) sprite.destroy();
   for (const digits of Object.values(scene.hpDigitSprites ?? {})) {
     for (const d of digits) d.destroy();
   }
+  for (const sprite of Object.values(scene.statusIconSprites ?? {})) sprite.destroy();
   scene.unitSprites = {};
   scene.headSprites = {};
   scene.hpDigitSprites = {};
+  scene.statusIconSprites = {};
 
   for (const unit of scene.game_.units) {
     const topLeftX = unit.x * TILE_SIZE;
@@ -62,6 +77,23 @@ export function refreshUnits(scene) {
         digitSprite.setDepth(DEPTH.UNITS);
         scene.hpDigitSprites[unit.id].push(digitSprite);
       });
+    }
+
+    // Ported from android/assets/images/status.png - shown top-right of the
+    // tile (HP digits already own bottom-left, head overlay owns top-center)
+    // whenever the unit carries an active status. See STATUS_ICON_FRAME above
+    // for which badge maps to which of the four STATUS types.
+    if (unit.status) {
+      const iconFrame = STATUS_ICON_FRAME[unit.status.type];
+      const iconSprite = scene.add.sprite(
+        topLeftX + TILE_SIZE - STATUS_ICON_SIZE / 2 - 2,
+        topLeftY + STATUS_ICON_SIZE / 2 + 2,
+        "status",
+        iconFrame
+      );
+      iconSprite.setDisplaySize(STATUS_ICON_SIZE, STATUS_ICON_SIZE);
+      iconSprite.setDepth(DEPTH.UNITS);
+      scene.statusIconSprites[unit.id] = iconSprite;
     }
   }
 }
