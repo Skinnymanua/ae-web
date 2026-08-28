@@ -9,6 +9,8 @@
     "./src/combat-resolution.js": "./src/combat-resolution.js",
     "./src/game-state.js": "./src/game-state.js",
     "./data/units.json": "./data/units.json",
+    "./data/unit-names.json": "./data/unit-names.json",
+    "./data/unit-descriptions.json": "./data/unit-descriptions.json",
     "./data/tiles.json": "./data/tiles.json",
     "./src/*": "./src/*"
   }

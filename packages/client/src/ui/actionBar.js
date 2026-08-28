@@ -85,7 +85,13 @@ export function showActionBar(scene, unit, x, y) {
   const tile = scene.game_.getTileAt(x, y);
   const attackable = getAttackableEnemyPositions(scene, unit);
   const canOccupy = scene.game_.canOccupyTile(unit.id, x, y);
-  const canBuyHere = unit.isCommander && tile.castle && tile.team === unit.team;
+  // Buying no longer requires the commander/king specifically to be the one
+  // standing on the castle - any friendly unit occupying an owned castle tile
+  // can open the purchase menu, matching how getBuyPositions/canBuyUnit in
+  // shared/game-state.js already work (they only check tile ownership, not who's
+  // on it). unit.isCommander was a stricter client-side-only gate than the rules
+  // actually enforce.
+  const canBuyHere = tile.castle && tile.team === unit.team;
 
   const otherActions = [];
   if (attackable.length > 0) {

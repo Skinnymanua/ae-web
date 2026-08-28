@@ -117,6 +117,11 @@ export function canBuy(game, units, unitDef, team, existingCommander) {
   const price = getUnitPrice(game, unitDef, team, existingCommander);
   return (
     price >= 0 &&
+    // Skeleton and crystal are scenario/summoned unit types, not army roster
+    // entries - both are priced 0 in units.json, which without this check would
+    // let the buy menu list them as free-to-place regular units.
+    !unitDef.isSkeleton &&
+    !unitDef.isCrystal &&
     isTeamAlive(game, team) &&
     game.players[team].gold >= price &&
     (canAddPopulation(game, team, unitDef.occupancy) || unitDef.isCommander)
