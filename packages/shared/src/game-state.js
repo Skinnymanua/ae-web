@@ -75,6 +75,24 @@ export function instantiateUnit(unitDef, { team, x, y, id }) {
   };
 }
 
+/**
+ * Attack range reachable from any tile in `movable`, excluding tiles already
+ * in `movable` itself (those get the plain move-range highlight instead).
+ * Shared by getThreatPositions (preview-mode movable) and
+ * getMoveAndAttackPositions (real, blocking-respecting movable) below - the
+ * two differ only in how `movable` itself was computed.
+ */
+function computeExtendedAttackPositions(board, unit, movable) {
+  const extendedAttack = new Set();
+  for (const key of movable) {
+    const [mx, my] = key.split(",").map(Number);
+    for (const pos of createAttackablePositions(board, { ...unit, x: mx, y: my })) {
+      if (!movable.has(pos)) extendedAttack.add(pos);
+    }
+  }
+  return extendedAttack;
+}
+
 export class GameState {
   /**
    * @param {object} params
@@ -172,12 +190,6 @@ export class GameState {
     const { movable, moveMark } = createMovablePositions(this._board(), unit, { game: this });
     return { positions: movable, moveMark };
   }
-  
-    getMovablePositions(unitId) {
-    const unit = this.getUnit(unitId);
-    const { movable, moveMark } = createMovablePositions(this._board(), unit, { game: this });
-    return { positions: movable, moveMark };
-  }
 
   /**
    * Preview-mode movable positions (ignores occupancy/blocking, matching the original's
@@ -190,15 +202,23 @@ export class GameState {
     const unit = this.getUnit(unitId);
     const board = this._board();
     const { movable } = createMovablePositions(board, unit, { preview: true });
+    const extendedAttack = computeExtendedAttackPositions(board, unit, movable);
+    return { movable, extendedAttack };
+  }
 
-    const extendedAttack = new Set();
-    for (const key of movable) {
-      const [mx, my] = key.split(",").map(Number);
-      for (const pos of createAttackablePositions(board, { ...unit, x: mx, y: my })) {
-        if (!movable.has(pos)) extendedAttack.add(pos);
-      }
-    }
-
+  /**
+   * Real (non-preview, blocking-respecting) movable positions for unitId, plus
+   * the attack range reachable from any of those tiles - the same "move range
+   * + attack-beyond-move" combination getThreatPositions shows for an enemy's
+   * threat preview, but grounded in tiles the unit can actually reach right
+   * now rather than preview mode. Used when the player selects their own unit
+   * to move it, so they can see attack options beyond the move-range tiles
+   * before committing to a destination.
+   */
+  getMoveAndAttackPositions(unitId) {
+    const unit = this.getUnit(unitId);
+    const { positions: movable } = this.getMovablePositions(unitId);
+    const extendedAttack = computeExtendedAttackPositions(this._board(), unit, movable);
     return { movable, extendedAttack };
   }
 

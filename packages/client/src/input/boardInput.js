@@ -63,9 +63,10 @@ export function handleActionBarCancelClick(scene) {
     unit.currentMovementPoint = origin.movementPoint;
     scene.selectedUnitId = unit.id;
     scene.pendingMoveTarget = null;
-    const { positions } = scene.game_.getMovablePositions(unit.id);
+    const { movable, extendedAttack } = scene.game_.getMoveAndAttackPositions(unit.id);
     clearHighlights(scene);
-    highlightPositionSet(scene, positions, 0xffcc33, 0.45);
+    highlightPositionSet(scene, movable, 0xffcc33, 0.45);
+    highlightPositionSet(scene, extendedAttack, 0xdd4444, 0.4);
     selectUnitForStats(scene, unit);
   };
 
@@ -175,9 +176,10 @@ function handleUnitSelectionClick(scene, x, y) {
   
   scene.selectedUnitId = clickedUnit.id;
   scene.pendingMoveTarget = null;
-  const { positions } = scene.game_.getMovablePositions(clickedUnit.id);
+  const { movable, extendedAttack } = scene.game_.getMoveAndAttackPositions(clickedUnit.id);
   clearHighlights(scene);
-  highlightPositionSet(scene, positions, 0xffcc33, 0.45);
+  highlightPositionSet(scene, movable, 0xffcc33, 0.45);
+  highlightPositionSet(scene, extendedAttack, 0xdd4444, 0.4);
   selectUnitForStats(scene, clickedUnit);
 }
 

@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { ACTION_ICON, STAT_ICON, TILE_SIZE, BOARD_OFFSET_Y, DEPTH } from "../constants.js";
-import { clearHighlights, addHighlight, refreshTileTexture } from "../render/tiles.js";
+import { clearHighlights, highlightPositionSet, refreshTileTexture } from "../render/tiles.js";
 import { refreshUnits } from "../render/units.js";
 import { showBuyMenu } from "./dialogs.js";
 import { updateInfoText } from "./hud.js";
@@ -42,14 +42,12 @@ export function finishUnitAction(scene, unit) {
   refreshStatsPanel(scene);
 }
 
-export function enterAttackTargetMode(scene, unit, attackablePositions) {
+export function enterAttackTargetMode(scene, unit) {
   clearActionBar(scene);
   scene.attackTargetMode = true;
   scene._pendingAttacker = unit;
   clearHighlights(scene);
-  for (const { x, y } of attackablePositions) {
-    addHighlight(scene, x, y, 0xdd4444, 0.4);
-  }
+  highlightPositionSet(scene, scene.game_.getAttackablePositions(unit.id), 0xdd4444, 0.4);
 }
 
 // Compass slots around the unit — confirmed against a real screenshot of the
@@ -97,7 +95,7 @@ export function showActionBar(scene, unit, x, y) {
 
   const otherActions = [];
   if (attackable.length > 0) {
-    otherActions.push({ frame: ACTION_ICON.ATTACK, onClick: () => enterAttackTargetMode(scene, unit, attackable) });
+    otherActions.push({ frame: ACTION_ICON.ATTACK, onClick: () => enterAttackTargetMode(scene, unit) });
   }
   if (canOccupy) {
     otherActions.push({
