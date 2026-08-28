@@ -68,8 +68,20 @@ export function createPurchaseStrip(scene, opts) {
   // Dedicated invisible hit-zone (not the portraits themselves) drives both
   // drag-to-scroll and wheel-to-scroll, so drags/wheel work anywhere over the
   // strip - not just when the pointer happens to start on a portrait.
+  //
+  // Positioned in LOCAL coordinates (x, y - same convention as stripContainer
+  // above), NOT parentX+x/parentY+y. Container.add() doesn't preserve world
+  // position - it reinterprets whatever x/y the object already has as local
+  // coordinates relative to the new parent. Building this at the absolute
+  // scene position and only afterward calling parentContainer.add(hitZone)
+  // meant parentContainer's own offset got applied a SECOND time on top of
+  // the offset already baked into hitZone's x/y, landing it far from the
+  // visible strip - hit-testing failed silently since hitZone was never
+  // actually where the strip is drawn. (maskGraphics above is different: it's
+  // never added to any container, so its absolute scene-space position is
+  // correct as-is - don't "fix" that one the same way.)
   const hitZone = scene.add
-    .rectangle(parentX + x, parentY + y, width, stripHeight, 0x000000, 0)
+    .rectangle(x, y, width, stripHeight, 0x000000, 0)
     .setOrigin(0, 0)
     .setScrollFactor(0)
     .setInteractive();
@@ -86,6 +98,22 @@ export function createPurchaseStrip(scene, opts) {
     dragging = false;
     dragStartX = pointer.x;
     scrollStartX = scrollX;
+  });
+  // hitZone is the sole authority for clicks on the strip, not the badges
+  // themselves - see the note above the badge/sprite creation below for why.
+  // pointer.x is screen-space (matches how dragStartX above is already used
+  // directly with no offset, since everything here is scrollFactor(0));
+  // subtracting the strip's own screen-space left edge and adding back the
+  // current scroll offset converts that into "unscrolled content space",
+  // the same space portraits are laid out in via px = i * (size + gap).
+  hitZone.on("pointerup", (pointer) => {
+    if (dragging) return;
+    const contentX = pointer.x - (parentX + x) + scrollX;
+    const index = Math.floor(contentX / (portraitSize + portraitGap));
+    const item = items[index];
+    if (item && contentX - index * (portraitSize + portraitGap) <= portraitSize) {
+      select(item.id);
+    }
   });
   const endDrag = () => {
     dragging = false;
@@ -116,26 +144,20 @@ export function createPurchaseStrip(scene, opts) {
   items.forEach((item, i) => {
     const px = i * (portraitSize + portraitGap);
     const py = 4;
-    // The badge itself is the click target - not a separately-positioned
-    // invisible rectangle. Two objects independently computing "the same"
-    // position (one via (px, py), the other via (px + size/2, py + size/2))
-    // is exactly the kind of setup that silently drifts apart if either
-    // formula ever changes without the other - see actionBar.js's bg/iconImg
-    // hit-area bug. Image objects (badge has a real texture) get a correct
-    // default hit area from setInteractive() with no explicit shape - that's
-    // the standard, well-supported Phaser pattern, unlike Arc/Shape objects.
-    const badge = scene.add.image(px + portraitSize / 2, py + portraitSize / 2, badgeSheet, 0).setScrollFactor(0).setInteractive();
+    // The badge is purely visual - hitZone (above) is the sole click
+    // authority for the whole strip, now that its position bug (see the
+    // comment above hitZone's creation) is fixed. An earlier version made the
+    // badge itself interactive instead; that "worked" only in the sense that
+    // hitZone was silently receiving no real hits at all (mispositioned), not
+    // because of any actual competition between the two - so it's simpler and
+    // more robust to keep click detection in one place (hitZone) rather than
+    // split across two separately-hit-tested objects that both claim to
+    // handle the same clicks.
+    const badge = scene.add.image(px + portraitSize / 2, py + portraitSize / 2, badgeSheet, 0);
     badge.setDisplaySize(portraitSize - 4, portraitSize - 4);
     const sprite = scene.add.sprite(px + portraitSize / 2, py + portraitSize / 2, item.textureKey, item.frameIndex);
     sprite.setDisplaySize(portraitSize - 6, portraitSize - 6);
     stripContainer.add([badge, sprite]);
-
-    // pointerup (not pointerdown), and skip if this press turned into a
-    // drag - same rationale as render/tiles.js's tile clicks vs camera drag.
-    badge.on("pointerup", () => {
-      if (dragging) return;
-      select(item.id);
-    });
 
     entries.push({ item, badge });
   });
