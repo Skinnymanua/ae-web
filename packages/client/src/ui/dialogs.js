@@ -1,8 +1,8 @@
 import unitsData from "@ae/shared/data/units.json";
 import unitNames from "@ae/shared/data/unit-names.json";
 import unitDescriptions from "@ae/shared/data/unit-descriptions.json";
-import { highlightPositionSet, clearHighlights } from "../render/tiles.js";
 import { createPurchaseStrip } from "./purchaseStrip.js";
+import { purchaseUnit } from "../input/boardInput.js";
 import { getUnitSpriteKey } from "../render/unitTexture.js";
 import { DEPTH, HUD_ICON, STAT_ICON, PHYSICAL_ATTACK_COLOR, MAGIC_ATTACK_COLOR } from "../constants.js";
 
@@ -109,9 +109,13 @@ export function showConfirm(scene, message, onYes, onNo) {
  * Unit-detail purchase panel - one unit shown in full (name, price, population
  * cost, attack range, attack/pdef/movement stats, description) with a portrait
  * strip along the bottom to switch between every unit the current team can
- * currently afford. Picking "Buy" enters placement mode (scene.buyMode +
- * scene.pendingBuyUnitIndex), highlighting owned/empty castle tiles - the actual
- * placement click is handled by input/boardInput.js's onTileClick.
+ * currently afford. `castleX`/`castleY` is the specific castle this menu was
+ * opened from (an empty owned castle clicked directly, or the one a king is
+ * standing on - see input/boardInput.js and ui/actionBar.js) - buying is
+ * always scoped to that one castle now, never the whole board. Picking "Buy"
+ * hands off to input/boardInput.js's purchaseUnit, which places the unit and
+ * either enters normal movement-mode selection (castle empty) or waits for a
+ * placement click among the castle's own reachable tiles (castle occupied).
  *
  * Ported to roughly match RightPanelRenderer/StatusBarRenderer's in-game unit-info
  * panel styling (icons_hud_battle for attack/pdef, icons_action for move/mdef,
@@ -119,7 +123,7 @@ export function showConfirm(scene, message, onYes, onNo) {
  * plain text list. Portrait-strip picker (vs. the original's vertical list) is
  * an intentional deviation for the web port's portrait-mode layout.
  */
-export function showBuyMenu(scene) {
+export function showBuyMenu(scene, castleX, castleY) {
   scene.modalOpen = true;
   const team = scene.game_.currentTeam;
 
@@ -294,8 +298,12 @@ export function showBuyMenu(scene) {
     // Affordability (gold, population capacity, team-alive) is checked
     // per-unit here rather than at listing time, so an out-of-reach unit
     // still shows its stats/description - only actually buying it is blocked.
-    const canBuy = scene.game_.canBuyUnit(def.index, team);
-    goldGroup.text.setColor(canBuy ? "#ffdd44" : "#dd4444");
+    // canPlacePurchase covers the other way a unit can be un-buyable even
+    // with gold to spare: the castle is occupied (by the king) and this
+    // unit's own movement can't find anywhere from there to actually stand.
+    const canAfford = scene.game_.canBuyUnit(def.index, team);
+    const canBuy = canAfford && scene.game_.canPlacePurchase(def.index, castleX, castleY, team);
+    goldGroup.text.setColor(canAfford ? "#ffdd44" : "#dd4444");
 
     buyText.off("pointerdown");
     if (canBuy) {
@@ -305,15 +313,7 @@ export function showBuyMenu(scene) {
         strip.destroy();
         scene.modalOpen = false;
         container.destroy();
-        scene.pendingBuyUnitIndex = def.index;
-        scene.buyMode = true;
-        clearHighlights(scene);
-        highlightPositionSet(
-          scene,
-          scene.game_.getBuyPositions(team).map((p2) => `${p2.x},${p2.y}`),
-          0x44ddaa,
-          0.4
-        );
+        purchaseUnit(scene, def, castleX, castleY, team);
       });
     } else {
       buyText.setColor("#666677");
@@ -337,7 +337,9 @@ export function showBuyMenu(scene) {
         textureKey,
         frameIndex,
         def,
-        dimmed: !scene.game_.canBuyUnit(def.index, team),
+        dimmed:
+          !scene.game_.canBuyUnit(def.index, team) ||
+          !scene.game_.canPlacePurchase(def.index, castleX, castleY, team),
         // Commander's body sprite is intentionally headless in the source art -
         // see render/units.js's on-board equivalent and statsPanel.js's stats-bar
         // portrait, both of which layer a separate team-colored head on top only

@@ -142,6 +142,7 @@ export class BoardScene extends Phaser.Scene {
     this.pendingMoveTarget = null;
     this.buyMode = false;
     this.pendingBuyUnitIndex = null;
+    this.pendingBuyCastle = null;
     this.animating = false;
     this.modalOpen = false;
     this.actionBarOpen = false;

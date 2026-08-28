@@ -113,7 +113,7 @@ export function showActionBar(scene, unit, x, y) {
       frame: ACTION_ICON.BUY,
       onClick: () => {
         clearActionBar(scene);
-        showBuyMenu(scene);
+        showBuyMenu(scene, x, y);
         finishUnitAction(scene, unit);
       },
     });

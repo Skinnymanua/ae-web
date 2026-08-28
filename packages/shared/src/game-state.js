@@ -15,6 +15,7 @@ import {
   createAttackablePositions,
   canUnitMove,
   getMovementPointCost,
+  posKey,
 } from "./movement.js";
 import { canAttack, canCounter, applyAttack } from "./combat-resolution.js";
 import { calcIncome, canBuy, getUnitPrice, canOccupy, resolveCapture, nextTurn, isTeamAlive, checkTeamDestroy } from "./turn.js";
@@ -348,6 +349,78 @@ export class GameState {
     player.gold -= price;
     const unit = instantiateUnit(unitDef, { team, x, y });
     unit._tile = this.getTileAt(x, y);
+    this.units.push(unit);
+    player.population += unitDef.occupancy;
+    return unit;
+  }
+
+  /**
+   * Movement options for a not-yet-purchased unit as if it had just spawned
+   * at castle (x, y) - lets the buy UI show the same movable/attack
+   * highlighting a real unit selection gets, and lets canPlacePurchase below
+   * decide whether a purchase is even legal, all before the unit exists in
+   * this.units.
+   *
+   * If (x, y) is already occupied - the king standing on his own castle is
+   * the only case the buy menu ever allows this for, see canBuyHere in
+   * ui/actionBar.js - the spawn tile itself is correctly excluded from
+   * `movable` by createMovablePositions' normal occupancy check (a
+   * different unit already being there blocks it same as any other
+   * destination), while the flood-fill still explores outward from it to
+   * find tiles the new unit could actually reach.
+   */
+  getSpawnMovablePositions(unitDefIndex, x, y, team) {
+    const unitDef = this.unitDefs.find((u) => u.index === unitDefIndex);
+    const tempUnit = {
+      id: "__pending_purchase__",
+      team,
+      x,
+      y,
+      currentMovementPoint: unitDef.movementPoint,
+      abilities: unitDef.abilities,
+      isCrystal: unitDef.isCrystal,
+    };
+    const board = this._board();
+    const { movable, moveMark } = createMovablePositions(board, tempUnit, { game: this });
+    const extendedAttack = computeExtendedAttackPositions(board, tempUnit, movable);
+    return { movable, moveMark, extendedAttack };
+  }
+
+  /**
+   * Whether unitDefIndex has anywhere legal to end up if bought at castle
+   * (x, y) right now. Always true for an empty castle (the castle tile
+   * itself counts). False only when the castle is occupied - by the king,
+   * per canBuyHere's gating - and every tile the new unit could reach from
+   * there is also blocked, e.g. the king pinned down with no room to
+   * retreat: there's simply nowhere for the purchase to go.
+   */
+  canPlacePurchase(unitDefIndex, x, y, team) {
+    return this.getSpawnMovablePositions(unitDefIndex, x, y, team).movable.size > 0;
+  }
+
+  /**
+   * Buys a unit for `team` and places it at (destX, destY) - either directly
+   * on the owned castle at (castleX, castleY) when that tile is itself the
+   * destination and still empty, or - when the castle is occupied by the
+   * unit already standing there (the king) - anywhere that unit could reach
+   * from the castle, per getSpawnMovablePositions. Validates gold/population,
+   * that (castleX, castleY) is really an owned castle, and that (destX,
+   * destY) is actually reachable from it; returns null and changes nothing
+   * on any failure.
+   */
+  buyUnitAt(unitDefIndex, team, castleX, castleY, destX, destY) {
+    const tile = this.getTileAt(castleX, castleY);
+    if (!tile.castle || tile.team !== team) return null;
+    if (!this.canBuyUnit(unitDefIndex, team)) return null;
+    const { movable } = this.getSpawnMovablePositions(unitDefIndex, castleX, castleY, team);
+    if (!movable.has(posKey(destX, destY)) || this.getUnitAt(destX, destY)) return null;
+    const unitDef = this.unitDefs.find((u) => u.index === unitDefIndex);
+    const commander = this.units.find((u) => u.team === team && u.isCommander);
+    const price = getUnitPrice(this, unitDef, team, commander);
+    const player = this.players.find((p) => p.team === team);
+    player.gold -= price;
+    const unit = instantiateUnit(unitDef, { team, x: destX, y: destY });
+    unit._tile = this.getTileAt(destX, destY);
     this.units.push(unit);
     player.population += unitDef.occupancy;
     return unit;

@@ -19,6 +19,60 @@ function selectUnitForStats(scene, unit) {
   updateStatsPanel(scene, unit);
 }
 
+/** Puts `unit` into ordinary movement-mode selection — move/attack range
+ * highlighted, stats shown — the same state clicking any of your own fresh
+ * units produces (see handleUnitSelectionClick below). Exported so a unit
+ * that just spawned from a purchase (see purchaseUnit) can drop straight
+ * into it without waiting for a second click. */
+export function selectUnitForMovement(scene, unit) {
+  scene.selectedUnitId = unit.id;
+  scene.pendingMoveTarget = null;
+  const { movable, extendedAttack } = scene.game_.getMoveAndAttackPositions(unit.id);
+  clearHighlights(scene);
+  highlightPositionSet(scene, movable, 0xffcc33, 0.45);
+  highlightPositionSet(scene, extendedAttack, 0xdd4444, 0.4);
+  selectUnitForStats(scene, unit);
+}
+
+/**
+ * Executes a purchase chosen from the shop (ui/dialogs.js's Buy button).
+ *
+ * If the origin castle (castleX, castleY) is still empty, the unit is placed
+ * there directly and dropped straight into ordinary movement-mode selection
+ * (selectUnitForMovement) - same as clicking any other fresh unit - so the
+ * player can walk it off the castle or confirm it in place, same as "It's
+ * possible to keep the unit on the castle if king doesn't sit underneath".
+ *
+ * If the castle is occupied - only ever the king, since the buy button
+ * itself is gated to that case, see ui/actionBar.js's canBuyHere - there's
+ * nowhere to instantiate the unit yet: the tiles it could actually reach
+ * from the castle (excluding the castle tile itself) are highlighted and
+ * scene.buyMode waits for the player to pick one via handleBuyPlacementClick
+ * below. dialogs.js's canPlacePurchase check already guarantees this set is
+ * non-empty before the Buy button is even clickable - a king with nowhere to
+ * retreat makes every unit un-buyable at that castle, not just this click.
+ */
+export function purchaseUnit(scene, unitDef, castleX, castleY, team) {
+  const { movable } = scene.game_.getSpawnMovablePositions(unitDef.index, castleX, castleY, team);
+  const castleKey = `${castleX},${castleY}`;
+
+  if (movable.has(castleKey)) {
+    const unit = scene.game_.buyUnitAt(unitDef.index, team, castleX, castleY, castleX, castleY);
+    if (!unit) return;
+    refreshUnits(scene);
+    updateInfoText(scene);
+    refreshStatsPanel(scene);
+    selectUnitForMovement(scene, unit);
+    return;
+  }
+
+  scene.buyMode = true;
+  scene.pendingBuyUnitIndex = unitDef.index;
+  scene.pendingBuyCastle = { x: castleX, y: castleY };
+  clearHighlights(scene);
+  highlightPositionSet(scene, movable, 0xffcc33, 0.45);
+}
+
 export function onTileClick(scene, x, y) {
   if (scene.animating || scene.modalOpen) return;
 
@@ -131,21 +185,40 @@ function confirmPendingAttack(scene, attacker, target) {
   finishUnitAction(scene, attacker);
 }
 
+/**
+ * The placement click for a purchase that couldn't spawn directly on its
+ * castle (see purchaseUnit) - (x, y) must be one of the tiles that were
+ * highlighted, i.e. reachable from scene.pendingBuyCastle. On success the
+ * unit is created already standing at (x, y) and goes straight to the
+ * action bar, same as a unit whose real move just resolved - spawning here
+ * *was* its move for the turn, so there's no leftover movement-mode
+ * selection to offer.
+ */
 function handleBuyPlacementClick(scene, x, y) {
   const team = scene.game_.currentTeam;
-  if (
-    scene.pendingBuyUnitIndex !== null &&
-    scene.game_.canBuyUnit(scene.pendingBuyUnitIndex, team) &&
-    scene.game_.isCastleAccessible(x, y, team)
-  ) {
-    scene.game_.buyUnit(scene.pendingBuyUnitIndex, team, x, y);
-    refreshUnits(scene);
-    updateInfoText(scene);
-    refreshStatsPanel(scene);
-  }
+  const castle = scene.pendingBuyCastle;
+  const unit =
+    scene.pendingBuyUnitIndex !== null && castle
+      ? scene.game_.buyUnitAt(scene.pendingBuyUnitIndex, team, castle.x, castle.y, x, y)
+      : null;
+
   scene.buyMode = false;
   scene.pendingBuyUnitIndex = null;
+  scene.pendingBuyCastle = null;
   clearHighlights(scene);
+
+  if (!unit) return;
+
+  refreshUnits(scene);
+  updateInfoText(scene);
+  refreshStatsPanel(scene);
+  // No actionOrigin: unlike a real move, there's no walk-back path to
+  // reverse if the player hits the action bar's cancel icon - it just
+  // closes the bar (see handleActionBarCancelClick's `if (!unit || !origin)
+  // return;` guard) and leaves the unit standing where it was placed.
+  scene.actionOrigin = null;
+  selectUnitForStats(scene, unit);
+  showActionBar(scene, unit, x, y);
 }
 
 function handleUnitSelectionClick(scene, x, y) {
@@ -165,7 +238,7 @@ function handleUnitSelectionClick(scene, x, y) {
     // option at all.
     const tile = scene.game_.getTileAt(x, y);
     if (tile?.castle && tile.team === scene.game_.currentTeam) {
-      showBuyMenu(scene);
+      showBuyMenu(scene, x, y);
     }
     return;
   }
@@ -186,13 +259,7 @@ function handleUnitSelectionClick(scene, x, y) {
     return;
   }
   
-  scene.selectedUnitId = clickedUnit.id;
-  scene.pendingMoveTarget = null;
-  const { movable, extendedAttack } = scene.game_.getMoveAndAttackPositions(clickedUnit.id);
-  clearHighlights(scene);
-  highlightPositionSet(scene, movable, 0xffcc33, 0.45);
-  highlightPositionSet(scene, extendedAttack, 0xdd4444, 0.4);
-  selectUnitForStats(scene, clickedUnit);
+  selectUnitForMovement(scene, clickedUnit);
 }
 
 function handleActingUnitClick(scene, x, y) {
