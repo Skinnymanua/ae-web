@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { GameState } from "@ae/shared/src/game-state.js";
 import unitsData from "@ae/shared/data/units.json";
 import tilesData from "@ae/shared/data/tiles.json";
-import mapData from "../battle-test-map.json";
+import { MAPS } from "../maps/index.js";
 
 import { drawTileGrid, updateSelectedTileHighlight, refreshTombs } from "../render/tiles.js";
 import { refreshUnits, animateUnits } from "../render/units.js";
@@ -12,6 +12,24 @@ import { onTileClick } from "../input/boardInput.js";
 import { setupCameraDrag } from "../input/cameraDrag.js";
 
 export class BoardScene extends Phaser.Scene {
+  constructor() {
+    super("BoardScene");
+  }
+
+  /**
+   * Receives whatever scene.start("BoardScene", data) was called with (see
+   * SkirmishSetupScene#startGame) - map + the three configurable settings.
+   * Falls back to the first auto-discovered map and the original's own
+   * defaults if launched directly with no data (e.g. during dev iteration
+   * on this scene alone), so this never hard-crashes for missing input.
+   */
+  init(data) {
+    this.mapData_ = data?.mapData ?? MAPS[0]?.data;
+    this.maxLevel_ = data?.maxLevel ?? 3; // Rule.getDefaultRule()'s implicit cap
+    this.startingGold_ = data?.startingGold ?? 300;
+    this.unitCapacity_ = data?.unitCapacity ?? 15; // POPULATION_PRESET[0]
+  }
+
   preload() {
     for (let i = 0; i < 89; i++) {
       this.load.image(`tile_${i}`, `/images/tiles/tile_${i}.png`);
@@ -139,20 +157,19 @@ export class BoardScene extends Phaser.Scene {
 
   create() {
     this.game_ = new GameState({
-      mapData,
+      mapData: this.mapData_,
       unitDefs: unitsData.units,
       tileDefs: tilesData.tiles,
       players: [
-        { team: 0, type: 1, alliance: 0, gold: 300 },
-        { team: 1, type: 1, alliance: 1, gold: 300 },
+        { team: 0, type: 1, alliance: 0, gold: this.startingGold_ },
+        { team: 1, type: 1, alliance: 1, gold: this.startingGold_ },
       ],
+      rule: { maxLevel: this.maxLevel_, unitCapacity: this.unitCapacity_ },
     });
 
-    // battle-test-map.json spawns every buyable unit type for both team 0 and
-    // team 1 in facing rows (see the map's own generation notes) - covers
-    // melee-closing-distance, ranged-units-firing-immediately (catapult's
-    // 3-7 range reaches across the gap without moving), and everything in
-    // between, so this no longer needs a manually-injected single enemy.
+    // Whichever map SkirmishSetupScene passed in (see init() above) - covers
+    // whatever unit/terrain layout that map defines; no longer hardcoded to
+    // battle-test-map.json specifically.
 
     // --- interaction state (read/written by input/boardInput.js and ui/actionBar.js) ---
     this.selectedUnitId = null;

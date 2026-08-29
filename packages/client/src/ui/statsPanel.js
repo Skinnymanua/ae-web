@@ -2,12 +2,15 @@
  * Top-of-map stats bar, styled after the reference screenshot: three cells side by
  * side (left stat pair-column, center unit portrait, right stat pair-column), each
  * stat row a colored circular icon badge next to a pill-shaped value background.
- * Not from the original (which used a text-only side panel — see RightPanelRenderer)
- * — this is a bespoke layout built from the original's icon assets.
+ * Layout is bespoke (the original used a text-only side panel — see
+ * RightPanelRenderer), but the SIX stats shown are exactly RightPanelRenderer's
+ * own six (level/attack/pdef/mdef/hp/xp) - built from the original's icon assets,
+ * where it has one (XP has none in the source either - see addStatRow's iconFrame
+ * null case).
  *
  * Left column top-to-bottom: HP / Attack / Defence.
- * Right column top-to-bottom: Level / Magic strength (magic defence) / Move (max
- * tiles per move).
+ * Right column top-to-bottom: Level / Magic defence / XP (current/needed for next
+ * level, or "-/-" at max level - matches RightPanelRenderer's own display exactly).
  */
 import { HUD_ICON, STAT_ICON, BOARD_OFFSET_Y, DEPTH, PHYSICAL_ATTACK_COLOR, MAGIC_ATTACK_COLOR } from "../constants.js";
 import { getUnitSpriteKey } from "../render/unitTexture.js";
@@ -16,6 +19,8 @@ import {
   getEffectivePhysicalDefence,
   getEffectiveMagicDefence,
   getMaxHp,
+  getCurrentExperience,
+  getLevelUpExperience,
 } from "@ae/shared/src/combat-resolution.js";
 
 const BAR_HEIGHT = BOARD_OFFSET_Y;
@@ -28,7 +33,7 @@ const PILL_HEIGHT = 20;
 
 const CELL_BG = 0x232838;
 const PILL_BG = 0x3a4258;
-const BADGE_COLORS = { hp: 0xe0a83a, attack: 0x2b2b2b, pdef: 0xc0348a, level: 0xe8e4d8, mdef: 0xe0842a, move: 0xe8b13a };
+const BADGE_COLORS = { hp: 0xe0a83a, attack: 0x2b2b2b, pdef: 0xc0348a, level: 0xe8e4d8, mdef: 0xe0842a, xp: 0x2ec4d6 };
 
 
 function addStatRow(scene, container, graphics, x, y, key, iconSheet, iconFrame, align) {
@@ -41,9 +46,19 @@ function addStatRow(scene, container, graphics, x, y, key, iconSheet, iconFrame,
   graphics.fillStyle(PILL_BG, 1);
   graphics.fillRoundedRect(pillX, y, PILL_WIDTH, PILL_HEIGHT, 6);
 
-  const icon = scene.add.image(badgeX, badgeY, iconSheet, iconFrame);
-  icon.setDisplaySize(ICON_SIZE, ICON_SIZE);
-  container.add(icon);
+  if (iconFrame != null) {
+    const icon = scene.add.image(badgeX, badgeY, iconSheet, iconFrame);
+    icon.setDisplaySize(ICON_SIZE, ICON_SIZE);
+    container.add(icon);
+  } else {
+    // XP has no icon in the original either - RightPanelRenderer draws a
+    // plain "XP " text prefix, not an icon like level/attack/pdef/mdef do -
+    // keep the badge circle for visual consistency with this bar's other
+    // rows, but label it with text instead of an image.
+    const label = scene.add.text(badgeX, badgeY, "XP", { fontSize: "8px", color: "#000000", fontStyle: "bold" });
+    label.setOrigin(0.5, 0.5);
+    container.add(label);
+  }
 
   const text = scene.add.text(pillX + PILL_WIDTH - 8, y + PILL_HEIGHT / 2, "-", {
     fontSize: "13px",
@@ -93,7 +108,7 @@ export function createStatsPanel(scene) {
   texts.mdef = addStatRow(scene, container, g, rightX, rowY, "mdef", "icons_hud_battle", HUD_ICON.MDEF, "right");
   rowY += ROW_HEIGHT;
   texts.pdef = addStatRow(scene, container, g, leftX, rowY, "pdef", "icons_hud_battle", HUD_ICON.PDEF, "left");
-  texts.move = addStatRow(scene, container, g, rightX, rowY, "move", "icons_action", STAT_ICON.MOVE, "right");
+  texts.xp = addStatRow(scene, container, g, rightX, rowY, "xp", null, null, "right");
 
   container.setVisible(false);
   container.setScrollFactor(0);
@@ -143,7 +158,14 @@ export function updateStatsPanel(scene, unit) {
   panel.texts.pdef.setText(String(getEffectivePhysicalDefence(unit)));
   panel.texts.level.setText(String(unit.level));
   panel.texts.mdef.setText(String(getEffectiveMagicDefence(unit)));
-  panel.texts.move.setText(String(unit.maxMovementPoint));
+
+  // Ported from RightPanelRenderer's XP display exactly: "current/needed" for
+  // the next level, or "-/-" once maxLevel is reached (getLevelUpExperience's
+  // -1 sentinel) - cyan, matching the original's Color.CYAN for this stat.
+  const maxLevel = scene.game_.rule.maxLevel;
+  const neededXp = getLevelUpExperience(unit, maxLevel);
+  panel.texts.xp.setText(neededXp > 0 ? `${getCurrentExperience(unit, maxLevel)}/${neededXp}` : "-/-");
+  panel.texts.xp.setColor("#00ffff");
 }
 
 /** Re-renders the panel for whichever unit it's currently showing — call after

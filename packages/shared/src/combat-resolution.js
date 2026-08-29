@@ -18,11 +18,6 @@
 import { ABILITY, STATUS, getDamage, manhattanRange, hasStatus, attachAttackStatus } from "./combat.js";
 import { checkTeamDestroy, addTomb } from "./turn.js";
 
-const LEVEL_EXPERIENCE = [0, 100, 300, 600];
-const MAX_LEVEL = 3;
-
-export { LEVEL_EXPERIENCE, MAX_LEVEL };
-
 function hasAbility(unit, abilityId) {
   return unit.abilities?.some((a) => (typeof a === "object" ? a.id === abilityId : a === abilityId));
 }
@@ -109,7 +104,7 @@ export function canDestroyTile(attacker, x, y, tile) {
  */
 export function resolveDestroyTile(rule, attacker, x, y, tile) {
   if (!canDestroyTile(attacker, x, y, tile)) return null;
-  gainExperience(attacker, rule.attackExperience);
+  gainExperience(attacker, rule.attackExperience, rule.maxLevel);
   return tile.destroyedTileIndex ?? null;
 }
 
@@ -253,12 +248,12 @@ export function resolveHeal(game, rule, healer, target) {
     events.push({ type: "HEAL", healerId: healer.id, targetId: target.id, change });
     destroyedUnitIds.push(target.id);
     events.push({ type: "UNIT_DESTROY", unitId: target.id, killedBy: healer.id });
-    gainExperience(healer, rule.killExperience);
+    gainExperience(healer, rule.killExperience, rule.maxLevel);
     events.push({ type: "GAIN_EXPERIENCE", unitId: healer.id, amount: rule.killExperience });
   } else {
     target.currentHp += heal;
     events.push({ type: "HEAL", healerId: healer.id, targetId: target.id, change: heal });
-    gainExperience(healer, rule.attackExperience);
+    gainExperience(healer, rule.attackExperience, rule.maxLevel);
     events.push({ type: "GAIN_EXPERIENCE", unitId: healer.id, amount: rule.attackExperience });
   }
 
@@ -267,22 +262,40 @@ export function resolveHeal(game, rule, healer, target) {
 
 // --- Experience / leveling ------------------------------------------------
 
-function levelForExperience(experience) {
+// Ported from Unit's hardcoded LEVEL_EXPERIENCE = {0, 100, 300, 600} (levels
+// 0-3, the original's fixed cap) - generalized into a formula so a game's
+// rule.maxLevel (see game-state.js's DEFAULT_RULE) can raise that cap. The
+// original's own 4 entries are exactly the triangular-number pattern
+// cumulative-100*k-per-level produces (100, 100+200=300, 300+300=600), so
+// this reproduces them exactly at maxLevel=3 and extends the SAME pattern
+// beyond it rather than inventing a different curve.
+function levelExperienceTable(maxLevel) {
+  const table = [0];
+  for (let n = 1; n <= maxLevel; n++) {
+    table.push(table[n - 1] + 100 * n);
+  }
+  return table;
+}
+
+function levelForExperience(experience, maxLevel) {
+  const table = levelExperienceTable(maxLevel);
   let level = 0;
-  for (; level <= MAX_LEVEL; level++) {
-    if (experience < LEVEL_EXPERIENCE[level]) {
+  for (; level <= maxLevel; level++) {
+    if (experience < table[level]) {
       return Math.max(level - 1, 0);
     }
   }
-  return MAX_LEVEL;
+  return maxLevel;
 }
 
-/** Mutates `unit`, returns true if this pushed it to a new level (HP/MP bump on level-up). */
-export function gainExperience(unit, experience) {
-  if (unit.level >= MAX_LEVEL) return false;
+/** Mutates `unit`, returns true if this pushed it to a new level (HP/MP bump
+ * on level-up). `maxLevel` should always be the current game's rule.maxLevel
+ * (default 3, matching the original's hardcoded cap - see DEFAULT_RULE). */
+export function gainExperience(unit, experience, maxLevel) {
+  if (unit.level >= maxLevel) return false;
   const oldLevel = unit.level;
   unit.experience += experience;
-  unit.level = levelForExperience(unit.experience);
+  unit.level = levelForExperience(unit.experience, maxLevel);
   const levelAdvance = unit.level - oldLevel;
   if (levelAdvance > 0) {
     unit.currentHp += unit.hpGrowth * levelAdvance;
@@ -290,6 +303,24 @@ export function gainExperience(unit, experience) {
     return true;
   }
   return false;
+}
+
+/** Ported from Unit#getCurrentExperience: XP accumulated since reaching the
+ * unit's current level (not the running total - see unit.experience for
+ * that). Used for the "current/needed" XP display - see getLevelUpExperience
+ * below and ui/statsPanel.js. */
+export function getCurrentExperience(unit, maxLevel) {
+  const table = levelExperienceTable(maxLevel);
+  return unit.experience - table[unit.level];
+}
+
+/** Ported from Unit#getLevelUpExperience: XP still needed to reach the next
+ * level, or -1 if already at maxLevel (matching the original's exact
+ * sentinel - RightPanelRenderer shows "-/-" for this case). */
+export function getLevelUpExperience(unit, maxLevel) {
+  if (unit.level >= maxLevel) return -1;
+  const table = levelExperienceTable(maxLevel);
+  return table[unit.level + 1] - table[unit.level];
 }
 
 // --- Attack resolution -----------------------------------------------------
@@ -335,10 +366,10 @@ export function resolveAttack(game, rule, attacker, defender) {
   if (defender.currentHp <= 0) {
     destroyedUnitIds.push(defender.id);
     events.push({ type: "UNIT_DESTROY", unitId: defender.id, killedBy: attacker.id });
-    gainExperience(attacker, rule.killExperience);
+    gainExperience(attacker, rule.killExperience, rule.maxLevel);
     events.push({ type: "GAIN_EXPERIENCE", unitId: attacker.id, amount: rule.killExperience });
   } else {
-    gainExperience(attacker, rule.attackExperience);
+    gainExperience(attacker, rule.attackExperience, rule.maxLevel);
     events.push({ type: "GAIN_EXPERIENCE", unitId: attacker.id, amount: rule.attackExperience });
 
     if (canCounter(game, attacker, defender)) {
@@ -359,10 +390,10 @@ export function resolveAttack(game, rule, attacker, defender) {
       if (attacker.currentHp <= 0) {
         destroyedUnitIds.push(attacker.id);
         events.push({ type: "UNIT_DESTROY", unitId: attacker.id, killedBy: defender.id });
-        gainExperience(defender, rule.killExperience);
+        gainExperience(defender, rule.killExperience, rule.maxLevel);
         events.push({ type: "GAIN_EXPERIENCE", unitId: defender.id, amount: rule.killExperience });
       } else {
-        gainExperience(defender, rule.counterExperience);
+        gainExperience(defender, rule.counterExperience, rule.maxLevel);
         events.push({ type: "GAIN_EXPERIENCE", unitId: defender.id, amount: rule.counterExperience });
       }
     }

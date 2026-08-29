@@ -66,6 +66,7 @@ export const DEFAULT_RULE = {
   castleClear: true,
   healerBaseHeal: 40, // Rule.HEALER_BASE_HEAL - see combat-resolution.js's getHealerHeal
   refreshBaseHeal: 10, // Rule.REFRESH_BASE_HEAL - see combat-resolution.js's getRefresherHeal
+  maxLevel: 3, // the original's hardcoded cap - see combat-resolution.js's levelExperienceTable for why this is safely configurable higher
 };
 
 let nextUnitId = 1;

@@ -59,7 +59,7 @@ function addIconValueRight(scene, container, y, iconSheet, iconFrame, fontSize, 
  * already has a filled background rectangle sized (width, height) at (0,0);
  * this only adds the frame on top of it.
  */
-function drawDialogBorder(scene, container, width, height, borderSize = 16) {
+export function drawDialogBorder(scene, container, width, height, borderSize = 16) {
   const piece = (frameIndex, x, y, w, h) => {
     const img = scene.add.image(x, y, "border", frameIndex).setOrigin(0, 0);
     img.setDisplaySize(w, h);

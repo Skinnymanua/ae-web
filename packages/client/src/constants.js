@@ -40,6 +40,13 @@ export const HUD_ICON = { LEVEL: 3, ATTACK: 0, PDEF: 1, MDEF: 2 };
 export const PHYSICAL_ATTACK_COLOR = "#e30075";
 export const MAGIC_ATTACK_COLOR = "#0000ff";
 
+// Ported from ResourceManager's bg_team array - four SOLID colors (not image
+// assets - createColoredPixmap generates a 1x1 texture from each Color at
+// startup), used by StatusBarRenderer#drawStatusBar as the whole status
+// bar's background, tinted per game.currentTeam. RGB bytes taken directly
+// from the Color(r/256f, g/256f, b/256f, 1f) constructors.
+export const TEAM_COLOR = [0x0064c6, 0xa10070, 0x009937, 0x004172];
+
 // Explicit render-layer ordering. Without setDepth(), Phaser falls back to
 // creation order — that broke down because refreshUnits() (render/units.js)
 // destroys and recreates every unit sprite on nearly every action (move, buy,
