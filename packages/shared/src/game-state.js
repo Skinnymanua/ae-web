@@ -17,7 +17,8 @@ import {
   getMovementPointCost,
   posKey,
 } from "./movement.js";
-import { canAttack, canCounter, applyAttack } from "./combat-resolution.js";
+import { canAttack, canCounter, applyAttack, isWithinRange } from "./combat-resolution.js";
+import { ABILITY } from "./combat.js";
 import {
   calcIncome,
   canBuy,
@@ -28,7 +29,15 @@ import {
   isTeamAlive,
   checkTeamDestroy,
   applyAuraEffects,
+  applyTombHazard,
+  isTomb,
+  removeTomb,
+  updateTombs,
 } from "./turn.js";
+
+function hasAbility(unit, abilityId) {
+  return unit.abilities?.some((a) => (typeof a === "object" ? a.id === abilityId : a === abilityId));
+}
 
 export const DEFAULT_RULE = {
   castleIncome: 100,
@@ -139,6 +148,8 @@ export class GameState {
     this.currentTeam = players[0]?.team ?? 0;
     this.turn = 1;
     this.gameOver = false;
+    this.tombs = (mapData.tombs ?? []).map((t) => ({ ...t }));
+    this.commanderDeaths = {}; // {[team]: number} - read by turn.js's getUnitPrice for repurchase-cost scaling
 
     this._syncTileRefs();
   }
@@ -300,12 +311,70 @@ export class GameState {
    * checks gate whether anything actually happens). This is the single
    * place standby should be set from - the client used to just mutate
    * unit.standby directly, which skipped the aura scan entirely.
+   *
+   * Also runs the tomb hazard check (turn.js's applyTombHazard) for the same
+   * reason: standing on a grave and going standby is what triggers it in the
+   * original, whether or not the unit has anything to do with necromancy.
    */
   standby(unitId) {
     const unit = this.getUnit(unitId);
     if (!unit) return;
     unit.standby = true;
     applyAuraEffects(this, this.units, unit);
+    applyTombHazard(this, unit);
+  }
+
+  /** Positions within summonerId's own attack range that currently hold an
+   * unoccupied tomb - what the UI highlights when entering summon-target
+   * mode, and what gates whether the Summon action-bar button shows at all
+   * (see ui/actionBar.js's showActionBar). Ported from
+   * GameManager#hasTombWithinRange, generalized to return the full set
+   * rather than just a boolean - empty for a non-NECROMANCER, since
+   * canSummon (below) always fails for those regardless of position. */
+  getSummonablePositions(summonerId) {
+    const positions = this.getAttackablePositions(summonerId);
+    const result = new Set();
+    for (const key of positions) {
+      const [x, y] = key.split(",").map(Number);
+      if (this.canSummon(summonerId, x, y)) result.add(key);
+    }
+    return result;
+  }
+
+  /** Ported from GameCore#canSummon: summonerId must have NECROMANCER, (x, y)
+   * must hold a tomb with nothing currently standing on it, and (x, y) must
+   * be within the summoner's own attack range (isWithinRange - the same
+   * range check attacks use, so a BLINDED necromancer can't summon either,
+   * same as it can't attack). */
+  canSummon(summonerId, x, y) {
+    const summoner = this.getUnit(summonerId);
+    if (!summoner || !hasAbility(summoner, ABILITY.NECROMANCER)) return false;
+    if (!isWithinRange(summoner, x, y)) return false;
+    if (!isTomb(this, x, y)) return false;
+    if (this.getUnitAt(x, y)) return false;
+    return true;
+  }
+
+  /**
+   * Ported from GameEventExecutor#onSummon: consumes the tomb at (x, y) and
+   * creates a new Skeleton (units.json's isSkeleton flag) for the
+   * summoner's team there. Skeletons carry POISONER + UNDEAD (see
+   * units.json) - a raised skeleton poisons what it hits, and won't leave
+   * another tomb if it's killed again.
+   *
+   * Deliberately free: no gold or population cost, matching the original,
+   * which routes this through createUnit directly rather than buyUnit -
+   * summoning isn't purchasing, it's the necromancer's whole point.
+   */
+  summon(summonerId, x, y) {
+    if (!this.canSummon(summonerId, x, y)) return null;
+    const summoner = this.getUnit(summonerId);
+    removeTomb(this, x, y);
+    const skeletonDef = this.unitDefs.find((u) => u.isSkeleton);
+    const unit = instantiateUnit(skeletonDef, { team: summoner.team, x, y });
+    unit._tile = this.getTileAt(x, y);
+    this.units.push(unit);
+    return unit;
   }
 
   canOccupy(unitId, x, y) {
@@ -486,7 +555,7 @@ export class GameState {
    * result) so the client can animate them — see ui HpChangeAnimator port.
    */
   endTurn() {
-    const result = nextTurn(this, this.units);
+    const result = nextTurn(this, this.units, () => updateTombs(this));
 
     if (result.destroyedUnitIds.length) {
       const affectedTeams = new Set(

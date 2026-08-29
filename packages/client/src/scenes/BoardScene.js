@@ -4,7 +4,7 @@ import unitsData from "@ae/shared/data/units.json";
 import tilesData from "@ae/shared/data/tiles.json";
 import mapData from "../battle-test-map.json";
 
-import { drawTileGrid, updateSelectedTileHighlight } from "../render/tiles.js";
+import { drawTileGrid, updateSelectedTileHighlight, refreshTombs } from "../render/tiles.js";
 import { refreshUnits, animateUnits } from "../render/units.js";
 import { createHud } from "../ui/hud.js";
 import { createStatsPanel } from "../ui/statsPanel.js";
@@ -125,6 +125,10 @@ export class BoardScene extends Phaser.Scene {
       frameWidth: 7,
       frameHeight: 9,
     });
+    // Ported from android/assets/images/tombstone.png - a single 24x24 image
+    // (not a spritesheet), drawn at full tile size the same way tile_N.png's
+    // source resolution doesn't matter - see render/tiles.js's refreshTombs.
+    this.load.image("tombstone", "/images/tombstone.png");
   }
 
   create() {
@@ -157,6 +161,8 @@ export class BoardScene extends Phaser.Scene {
     this.actionOrigin = null;
     this.attackTargetMode = false;
     this._pendingAttacker = null;
+    this.summonTargetMode = false;
+    this._pendingSummoner = null;
     this.highlightRects = [];
     this.pathPreviewRects = [];
     this.unitSprites = {};
@@ -165,6 +171,7 @@ export class BoardScene extends Phaser.Scene {
     this.elapsedMs = 0;
 
     drawTileGrid(this, (x, y) => onTileClick(this, x, y));
+    refreshTombs(this);
     refreshUnits(this);
     createHud(this);
     createStatsPanel(this);

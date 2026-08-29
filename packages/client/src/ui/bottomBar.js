@@ -16,7 +16,7 @@
  */
 import { DEPTH } from "../constants.js";
 import { showConfirm } from "./dialogs.js";
-import { clearHighlights } from "../render/tiles.js";
+import { clearHighlights, refreshTombs } from "../render/tiles.js";
 import { refreshUnits } from "../render/units.js";
 import { refreshStatsPanel } from "./statsPanel.js";
 import { animateHpChanges } from "../render/hpChange.js";
@@ -51,6 +51,7 @@ export function createBottomBar(scene) {
       scene.selectedUnitId = null;
       clearHighlights(scene);
       updateBottomBarEconomy(scene);
+      refreshTombs(scene); // a new round may have just decayed/removed tombs (turn.js's updateTombs)
       animateHpChanges(scene, result.hpChanges, () => {
         refreshUnits(scene);
         refreshStatsPanel(scene);

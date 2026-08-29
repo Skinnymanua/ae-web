@@ -132,3 +132,27 @@ export function clearSelectedTileHighlight(scene) {
     scene.selectedTileHighlight = null;
   }
 }
+
+/**
+ * Destroys and redraws every tombstone sprite from current game_.tombs -
+ * call wherever tombs might have changed: a death creating one
+ * (combat-resolution.js's applyAttack), decay removing one (turn.js's
+ * updateTombs, run at the start of a new round), or a NECROMANCER consuming
+ * one via summon or the standby tomb-hazard (turn.js's applyTombHazard).
+ * Sits on DEPTH.TOMBS - below units, above tiles - matching
+ * GameScreen#drawTombs being called right before drawUnits in the original.
+ */
+export function refreshTombs(scene) {
+  for (const sprite of scene.tombSprites ?? []) sprite.destroy();
+  scene.tombSprites = [];
+  for (const tomb of scene.game_.tombs) {
+    const sprite = scene.add.image(
+      tomb.x * TILE_SIZE + TILE_SIZE / 2,
+      tomb.y * TILE_SIZE + TILE_SIZE / 2 + BOARD_OFFSET_Y,
+      "tombstone"
+    );
+    sprite.setDisplaySize(TILE_SIZE, TILE_SIZE);
+    sprite.setDepth(DEPTH.TOMBS);
+    scene.tombSprites.push(sprite);
+  }
+}

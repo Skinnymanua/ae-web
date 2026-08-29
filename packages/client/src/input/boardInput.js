@@ -86,6 +86,11 @@ export function onTileClick(scene, x, y) {
     return;
   }
 
+  if (scene.summonTargetMode) {
+    handleSummonTargetClick(scene, x, y);
+    return;
+  }
+
   if (scene.actionBarOpen) {
     handleActionBarCancelClick(scene);
     return;
@@ -186,6 +191,35 @@ function confirmPendingAttack(scene, attacker, target) {
   clearHighlights(scene);
   clearSelectedTileHighlight(scene);
   finishUnitAction(scene, attacker);
+}
+
+/**
+ * A single click resolves summon-target mode - no preview/confirm step like
+ * attack has, since there's no defending unit's stats to show first (a tomb
+ * tile is just a tomb tile). Ends the summoner's turn on success, matching
+ * the original's doSummon submitting ACTION_FINISH immediately after Summon.
+ */
+function handleSummonTargetClick(scene, x, y) {
+  const summoner = scene._pendingSummoner;
+
+  if (scene.game_.canSummon(summoner.id, x, y)) {
+    scene.game_.summon(summoner.id, x, y);
+    scene.summonTargetMode = false;
+    scene._pendingSummoner = null;
+    clearHighlights(scene);
+    clearSelectedTileHighlight(scene);
+    refreshUnits(scene);
+    updateInfoText(scene);
+    finishUnitAction(scene, summoner);
+    return;
+  }
+
+  // invalid target — back out to the action bar rather than force a finish
+  scene.summonTargetMode = false;
+  scene._pendingSummoner = null;
+  clearHighlights(scene);
+  selectUnitForStats(scene, summoner);
+  showActionBar(scene, summoner, summoner.x, summoner.y);
 }
 
 /**

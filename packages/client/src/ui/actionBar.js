@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { ACTION_ICON, STAT_ICON, TILE_SIZE, BOARD_OFFSET_Y, DEPTH } from "../constants.js";
-import { clearHighlights, highlightPositionSet, refreshTileTexture } from "../render/tiles.js";
+import { clearHighlights, highlightPositionSet, refreshTileTexture, refreshTombs } from "../render/tiles.js";
 import { refreshUnits } from "../render/units.js";
 import { showBuyMenu } from "./dialogs.js";
 import { updateInfoText } from "./hud.js";
@@ -42,6 +42,7 @@ export function finishUnitAction(scene, unit) {
   scene.actionOrigin = null;
   clearHighlights(scene);
   refreshUnits(scene);
+  refreshTombs(scene); // standby may have just consumed a tomb (applyTombHazard) or an attack just before it may have created one
   updateInfoText(scene);
   refreshStatsPanel(scene);
 }
@@ -52,6 +53,18 @@ export function enterAttackTargetMode(scene, unit) {
   scene._pendingAttacker = unit;
   clearHighlights(scene);
   highlightPositionSet(scene, scene.game_.getAttackablePositions(unit.id), 0xdd4444, 0.4);
+}
+
+/** Same shape as enterAttackTargetMode above, for the Summon action -
+ * highlights unoccupied-tomb tiles within the necromancer's own attack
+ * range (see GameState#getSummonablePositions) in a distinct color so it
+ * doesn't read as an attack. */
+export function enterSummonTargetMode(scene, unit) {
+  clearActionBar(scene);
+  scene.summonTargetMode = true;
+  scene._pendingSummoner = unit;
+  clearHighlights(scene);
+  highlightPositionSet(scene, scene.game_.getSummonablePositions(unit.id), 0x9933cc, 0.4);
 }
 
 // Compass slots around the unit — confirmed against a real screenshot of the
@@ -97,10 +110,18 @@ export function showActionBar(scene, unit, x, y) {
   // with the castle empty instead goes through the direct tile-click shortcut
   // in input/boardInput.js (handleUnitSelectionClick).
   const canBuyHere = tile.castle && tile.team === unit.team && unit.isCommander;
+  // Non-empty only for a NECROMANCER with an unoccupied tomb within its own
+  // attack range - see GameState#getSummonablePositions. Computing the full
+  // set here (not just a boolean) means enterSummonTargetMode below can
+  // reuse it directly rather than recomputing.
+  const summonable = scene.game_.getSummonablePositions(unit.id);
 
   const otherActions = [];
   if (attackable.length > 0) {
     otherActions.push({ frame: ACTION_ICON.ATTACK, onClick: () => enterAttackTargetMode(scene, unit) });
+  }
+  if (summonable.size > 0) {
+    otherActions.push({ frame: ACTION_ICON.SUMMON, onClick: () => enterSummonTargetMode(scene, unit) });
   }
   if (canOccupy) {
     otherActions.push({

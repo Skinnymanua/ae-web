@@ -16,7 +16,7 @@
  */
 
 import { ABILITY, STATUS, getDamage, manhattanRange, hasStatus, attachAttackStatus } from "./combat.js";
-import { checkTeamDestroy } from "./turn.js";
+import { checkTeamDestroy, addTomb } from "./turn.js";
 
 const LEVEL_EXPERIENCE = [0, 100, 300, 600];
 const MAX_LEVEL = 3;
@@ -204,9 +204,11 @@ export function resolveAttack(game, rule, attacker, defender) {
 
 /**
  * Full turn-level wrapper: resolves the attack, removes destroyed units from
- * `units`, bumps a dead commander's repurchase price (COMMANDER_PRICE_STEP),
- * and runs the team-destroy/win-condition check for any team that just lost
- * its last unit or commander. Mutates `units` (removes dead entries) and `game`.
+ * `units`, bumps a dead commander's repurchase price (via
+ * game.commanderDeaths — see getUnitPrice in turn.js) or leaves a tomb for
+ * anyone else who wasn't already UNDEAD, and runs the team-destroy/
+ * win-condition check for any team that just lost its last unit or
+ * commander. Mutates `units` (removes dead entries) and `game`.
  */
 export function applyAttack(game, rule, units, mapInfo, attackerId, defenderId) {
   const attacker = units.find((u) => u.id === attackerId);
@@ -217,7 +219,20 @@ export function applyAttack(game, rule, units, mapInfo, attackerId, defenderId) 
     const deadUnit = units.find((u) => u.id === deadId);
     if (!deadUnit) continue;
     if (hasAbility(deadUnit, ABILITY.COMMANDER)) {
-      deadUnit._commanderPrice = (deadUnit._commanderPrice ?? deadUnit.price ?? 0) + rule.commanderPriceStep;
+      // Ported from GameCore#destroyUnit's commander-price bump. The dead
+      // unit itself is discarded right below, so mutating a field on it here
+      // would have no effect - the repurchase cost getUnitPrice (turn.js)
+      // actually reads comes from game.commanderDeaths[team], incremented
+      // here instead. Commander deaths never leave a tomb (see the `else`
+      // branch below for who does).
+      game.commanderDeaths = game.commanderDeaths ?? {};
+      game.commanderDeaths[deadUnit.team] = (game.commanderDeaths[deadUnit.team] ?? 0) + 1;
+    } else if (!hasAbility(deadUnit, ABILITY.UNDEAD)) {
+      // Ported from GameCore#destroyUnit's tomb creation - UNDEAD units
+      // (skeletons, ghosts) don't leave a second corpse behind; everyone
+      // else does, which a nearby NECROMANCER can later raise as a skeleton
+      // (see GameState#summon).
+      addTomb(game, deadUnit.x, deadUnit.y);
     }
   }
 

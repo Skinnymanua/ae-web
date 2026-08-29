@@ -12,6 +12,8 @@
  *   game.currentTeam: number
  *   game.turn: number
  *   game.gameOver: boolean
+ *   game.tombs: Array<{x, y, remainingTurn}>  — see addTomb/removeTomb/isTomb/updateTombs below
+ *   game.commanderDeaths: {[team]: number}  — read by getUnitPrice's repurchase-cost scaling
  *   game.rule: { castleIncome, villageIncome, commanderIncome, commanderPriceStep,
  *                unitCapacity, enemyClear, castleClear }
  * Plus a `board`-like object exposing castle/village positions and per-team counts —
@@ -24,6 +26,52 @@ import { getMaxHp } from "./combat-resolution.js";
 
 function hasAbility(unit, abilityId) {
   return unit.abilities?.some((a) => (typeof a === "object" ? a.id === abilityId : a === abilityId));
+}
+
+// --- Tombs -------------------------------------------------------------
+// Ported from entity.Tomb + Map#addTomb/#removeTomb/#isTomb/#updateTombs.
+// Tracked as game.tombs: Array<{x, y, remainingTurn}>. A tomb marks where a
+// unit died (see combat-resolution.js's applyAttack for who actually leaves
+// one) and decays by one remainingTurn each new ROUND - all teams have had a
+// turn, see nextTurn's onNewRound callback below - vanishing once that goes
+// negative. Starting at 1, a tomb survives the round it's created in plus
+// exactly one more full round before disappearing, matching
+// Tomb#update/Map#updateTombs exactly.
+
+export function addTomb(game, x, y) {
+  const existing = game.tombs.find((t) => t.x === x && t.y === y);
+  if (existing) {
+    existing.remainingTurn = 1; // refresh rather than duplicate
+  } else {
+    game.tombs.push({ x, y, remainingTurn: 1 });
+  }
+}
+
+export function removeTomb(game, x, y) {
+  game.tombs = game.tombs.filter((t) => !(t.x === x && t.y === y));
+}
+
+export function isTomb(game, x, y) {
+  return game.tombs.some((t) => t.x === x && t.y === y);
+}
+
+export function updateTombs(game) {
+  for (const tomb of game.tombs) tomb.remainingTurn -= 1;
+  game.tombs = game.tombs.filter((t) => t.remainingTurn >= 0);
+}
+
+/**
+ * Ported from GameEventExecutor#onStandby's tomb handling: if the
+ * standing-by unit is on a tomb tile, the tomb is consumed and the unit is
+ * poisoned for 1 turn as a "corpse curse" - unless it's a NECROMANCER, who
+ * can stand on (and summon from) graves without being punished for it.
+ */
+export function applyTombHazard(game, unit) {
+  if (!isTomb(game, unit.x, unit.y)) return;
+  removeTomb(game, unit.x, unit.y);
+  if (!hasAbility(unit, ABILITY.NECROMANCER)) {
+    attachStatus(unit, { type: STATUS.POISONED, remainingTurn: 1 });
+  }
 }
 
 export const PLAYER_TYPE = { NONE: 0 }; // extend as needed (LOCAL/AI/NETWORK etc.) — original had more, add when the lobby/player system is built
@@ -357,7 +405,7 @@ export function nextTurn(game, units, onNewRound) {
       game.currentTeam++;
     } else {
       game.currentTeam = 0;
-      onNewRound?.(); // original calls map.updateTombs() here — wire up once tomb/undead mechanics are ported
+      onNewRound?.(); // called once every team has had a turn - see GameState#endTurn's call site for updateTombs(this)
     }
   } while (!isTeamAlive(game, game.currentTeam));
   game.turn++;
