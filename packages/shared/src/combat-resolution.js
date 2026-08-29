@@ -96,6 +96,113 @@ export function canCounter(game, attacker, defender) {
   return isWithinRange(defender, attacker.x, attacker.y) && manhattanRange(defender, attacker) === 1;
 }
 
+// --- Healing -----------------------------------------------------------
+
+// Ported from GameCore#canHealReachTarget: a non-AIR_FORCE healer can't reach
+// an AIR_FORCE target (flyers) - an AIR_FORCE healer can reach anyone. Shared
+// by both canHeal and canRefresh below, matching the source.
+function canHealReachTarget(healer, target) {
+  return hasAbility(healer, ABILITY.AIR_FORCE) || !hasAbility(target, ABILITY.AIR_FORCE);
+}
+
+// Ported from GameCore#canReceiveHeal: UNDEAD can't receive a normal heal
+// (see canHeal below - it gets damaged instead), neither can a POISONED unit
+// (cure that first), nor one already above its own max HP (see
+// getHealerHeal's overflow note) until it drops back to <= max.
+function canReceiveHeal(target) {
+  return !hasAbility(target, ABILITY.UNDEAD) && !hasStatus(target, STATUS.POISONED) && target.currentHp <= getMaxHp(target);
+}
+
+/**
+ * Ported from GameCore#canHeal(healer, target). Self-targeting is always
+ * allowed regardless of range/minAttackRange - see GameState#getHealablePositions,
+ * which computes candidates via getAttackablePositions(..., includeSelf=true).
+ *
+ * The UNDEAD branch deliberately has no enemy/range check here, matching the
+ * source exactly - callers are expected to only ever offer in-range targets
+ * (see getHealablePositions), same division of responsibility as the
+ * original's hasAllyCanHealWithinRange.
+ */
+export function canHeal(game, healer, target) {
+  if (!healer || !target) return false;
+  if (!hasAbility(healer, ABILITY.HEALER) || !canHealReachTarget(healer, target)) return false;
+  if (canReceiveHeal(target)) {
+    return !isEnemyUnit(game, healer, target) || healer.id === target.id;
+  }
+  return hasAbility(target, ABILITY.UNDEAD);
+}
+
+/**
+ * Ported from UnitToolkit#getHealerHeal: HEALER_BASE_HEAL + 10/level for a
+ * normal target - deliberately NOT clamped to the target's max HP here (see
+ * resolveHeal below), letting a Paladin push an ally above their usual max;
+ * see GameState#standby's overflow-clamp for when that gets trimmed back
+ * down. Against an UNDEAD target this becomes 1.5x that amount as damage
+ * instead (holy magic hurts them).
+ */
+export function getHealerHeal(rule, healer, target) {
+  if (!hasAbility(healer, ABILITY.HEALER)) return 0;
+  const heal = rule.healerBaseHeal + 10 * healer.level;
+  return hasAbility(target, ABILITY.UNDEAD) ? -Math.round(heal * 1.5) : heal;
+}
+
+// Ported from GameCore#canRefresh - a SEPARATE, independent check from the
+// status-cleanse REFRESH_AURA also does (see turn.js's applyAuraEffects,
+// which uses isDebuffStatus/!targetIsEnemy for that instead, matching
+// GameEventExecutor#onStandby's canClean). This one gates the HP change:
+// reachable, not already overflowing max HP, and either an ally OR an
+// UNDEAD enemy (Spirit's aura can damage a nearby enemy skeleton/ghost).
+export function canRefresh(game, refresher, target) {
+  if (!refresher || !target) return false;
+  if (!canHealReachTarget(refresher, target)) return false;
+  if (target.currentHp > getMaxHp(target)) return false;
+  return !isEnemyUnit(game, refresher, target) || hasAbility(target, ABILITY.UNDEAD);
+}
+
+/** Ported from UnitToolkit#getRefresherHeal: REFRESH_BASE_HEAL + 5/level,
+ * same UNDEAD-becomes-damage flip as getHealerHeal above. */
+export function getRefresherHeal(rule, refresher, target) {
+  const heal = rule.refreshBaseHeal + refresher.level * 5;
+  return hasAbility(target, ABILITY.UNDEAD) ? -heal : heal;
+}
+
+/**
+ * Resolves a heal action: computes the heal (or heal-as-damage for an
+ * UNDEAD target) via getHealerHeal, applies it, and grants experience -
+ * ATTACK_EXPERIENCE normally, or KILL_EXPERIENCE if the heal-as-damage
+ * finishes off an UNDEAD target. Ported from OperationExecutor#onHeal.
+ *
+ * A living target's new HP is deliberately NOT clamped to their max (see
+ * getHealerHeal's docstring) - only the death case clamps, to exactly 0.
+ * Does NOT remove a destroyed target from the board - caller does that
+ * using destroyedUnitIds, same convention as resolveAttack.
+ */
+export function resolveHeal(game, rule, healer, target) {
+  if (!canHeal(game, healer, target)) {
+    throw new Error("resolveHeal: heal not allowed (check canHeal before calling)");
+  }
+  const heal = getHealerHeal(rule, healer, target);
+  const destroyedUnitIds = [];
+  const events = [];
+
+  if (target.currentHp + heal <= 0) {
+    const change = -target.currentHp; // actual delta applied: down to exactly 0
+    target.currentHp = 0;
+    events.push({ type: "HEAL", healerId: healer.id, targetId: target.id, change });
+    destroyedUnitIds.push(target.id);
+    events.push({ type: "UNIT_DESTROY", unitId: target.id, killedBy: healer.id });
+    gainExperience(healer, rule.killExperience);
+    events.push({ type: "GAIN_EXPERIENCE", unitId: healer.id, amount: rule.killExperience });
+  } else {
+    target.currentHp += heal;
+    events.push({ type: "HEAL", healerId: healer.id, targetId: target.id, change: heal });
+    gainExperience(healer, rule.attackExperience);
+    events.push({ type: "GAIN_EXPERIENCE", unitId: healer.id, amount: rule.attackExperience });
+  }
+
+  return { heal, destroyedUnitIds, events };
+}
+
 // --- Experience / leveling ------------------------------------------------
 
 function levelForExperience(experience) {
@@ -203,6 +310,26 @@ export function resolveAttack(game, rule, attacker, defender) {
 }
 
 /**
+ * Shared death handling for anything that can destroy units (attack,
+ * heal-as-damage-to-undead below): bumps a dead commander's repurchase
+ * price, or leaves a tomb for anyone else who wasn't already UNDEAD. Ported
+ * from GameCore#destroyUnit's commander-price/tomb branches. Mutates `game`
+ * only - does not remove anyone from `units` (caller does that).
+ */
+function handleUnitDeaths(game, units, destroyedUnitIds) {
+  for (const deadId of destroyedUnitIds) {
+    const deadUnit = units.find((u) => u.id === deadId);
+    if (!deadUnit) continue;
+    if (hasAbility(deadUnit, ABILITY.COMMANDER)) {
+      game.commanderDeaths = game.commanderDeaths ?? {};
+      game.commanderDeaths[deadUnit.team] = (game.commanderDeaths[deadUnit.team] ?? 0) + 1;
+    } else if (!hasAbility(deadUnit, ABILITY.UNDEAD)) {
+      addTomb(game, deadUnit.x, deadUnit.y);
+    }
+  }
+}
+
+/**
  * Full turn-level wrapper: resolves the attack, removes destroyed units from
  * `units`, bumps a dead commander's repurchase price (via
  * game.commanderDeaths — see getUnitPrice in turn.js) or leaves a tomb for
@@ -215,32 +342,40 @@ export function applyAttack(game, rule, units, mapInfo, attackerId, defenderId) 
   const defender = units.find((u) => u.id === defenderId);
   const result = resolveAttack(game, rule, attacker, defender);
 
-  for (const deadId of result.destroyedUnitIds) {
-    const deadUnit = units.find((u) => u.id === deadId);
-    if (!deadUnit) continue;
-    if (hasAbility(deadUnit, ABILITY.COMMANDER)) {
-      // Ported from GameCore#destroyUnit's commander-price bump. The dead
-      // unit itself is discarded right below, so mutating a field on it here
-      // would have no effect - the repurchase cost getUnitPrice (turn.js)
-      // actually reads comes from game.commanderDeaths[team], incremented
-      // here instead. Commander deaths never leave a tomb (see the `else`
-      // branch below for who does).
-      game.commanderDeaths = game.commanderDeaths ?? {};
-      game.commanderDeaths[deadUnit.team] = (game.commanderDeaths[deadUnit.team] ?? 0) + 1;
-    } else if (!hasAbility(deadUnit, ABILITY.UNDEAD)) {
-      // Ported from GameCore#destroyUnit's tomb creation - UNDEAD units
-      // (skeletons, ghosts) don't leave a second corpse behind; everyone
-      // else does, which a nearby NECROMANCER can later raise as a skeleton
-      // (see GameState#summon).
-      addTomb(game, deadUnit.x, deadUnit.y);
-    }
-  }
+  handleUnitDeaths(game, units, result.destroyedUnitIds);
 
   const remaining = units.filter((u) => !result.destroyedUnitIds.includes(u.id));
   units.length = 0;
   units.push(...remaining);
 
   const affectedTeams = new Set([attacker.team, defender.team]);
+  for (const team of affectedTeams) {
+    checkTeamDestroy(game, units, mapInfo, team);
+  }
+
+  return result;
+}
+
+/**
+ * Full turn-level wrapper for healing, mirroring applyAttack exactly:
+ * resolves the heal (see resolveHeal), runs the same death handling as
+ * combat (only reachable here if an UNDEAD target dies to heal-as-damage -
+ * see resolveHeal), removes any dead unit, and checks both teams for
+ * destruction (a Healer can target its own team OR an UNDEAD enemy, so
+ * either side could theoretically be the one affected).
+ */
+export function applyHeal(game, rule, units, mapInfo, healerId, targetId) {
+  const healer = units.find((u) => u.id === healerId);
+  const target = units.find((u) => u.id === targetId);
+  const result = resolveHeal(game, rule, healer, target);
+
+  handleUnitDeaths(game, units, result.destroyedUnitIds);
+
+  const remaining = units.filter((u) => !result.destroyedUnitIds.includes(u.id));
+  units.length = 0;
+  units.push(...remaining);
+
+  const affectedTeams = new Set([healer.team, target.team]);
   for (const team of affectedTeams) {
     checkTeamDestroy(game, units, mapInfo, team);
   }

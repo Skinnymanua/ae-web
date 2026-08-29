@@ -22,7 +22,7 @@
  */
 
 import { ABILITY, STATUS, hasStatus, isDebuffStatus, attachStatus, clearStatus, manhattanRange } from "./combat.js";
-import { getMaxHp } from "./combat-resolution.js";
+import { getMaxHp, canRefresh, getRefresherHeal } from "./combat-resolution.js";
 
 function hasAbility(unit, abilityId) {
   return unit.abilities?.some((a) => (typeof a === "object" ? a.id === abilityId : a === abilityId));
@@ -347,22 +347,37 @@ function tickStatus(unit, tile) {
 }
 
 /**
- * Ported from GameEventExecutor#onStandby's aura scan: run whenever ANY unit
- * goes standby (see GameState#standby), not just aura-bearers - the ability
- * checks below gate whether anything actually happens. A unit with
- * ATTACK_AURA inspires every ally within 2 tiles (+10 attack, see
- * combat.js's getAttackBonus); SLOWING_AURA does the same to enemies
- * (movement capped to 1 - see resetUnitForTurn above) unless they carry
- * SLOWING_AURA themselves; REFRESH_AURA cleanses a debuff from any ally
- * within range. Range is manhattan distance, not adjacency - "within 2
- * tiles", matching PositionGenerator#createPositionsWithinRange(x, y, 0, 2).
- * Mutates the affected units' .status in place.
+ * Ported from GameEventExecutor#onStandby's aura scan (status effects) PLUS
+ * OperationExecutor#onStandby's REFRESH_AURA heal computation - two separate
+ * checks in the original for the same ability (see canClean vs canRefresh),
+ * both folded in here since they run at the same trigger point. Run whenever
+ * ANY unit goes standby (see GameState#standby), not just aura-bearers - the
+ * ability checks below gate whether anything actually happens.
+ *
+ * - ATTACK_AURA inspires every ally within 2 tiles (+10 attack, see
+ *   combat.js's getAttackBonus).
+ * - SLOWING_AURA does the same to enemies (movement capped to 1 - see
+ *   resetUnitForTurn above) unless they carry SLOWING_AURA themselves.
+ * - REFRESH_AURA does two independent things to anyone in range: cleanses a
+ *   debuff from an ally (regardless of HP), and separately heals - or, per
+ *   canRefresh, damages an UNDEAD enemy caught in range - anyone not already
+ *   overflowing max HP, which can kill them.
+ *
+ * Range is manhattan distance, not adjacency - "within 2 tiles", matching
+ * PositionGenerator#createPositionsWithinRange(x, y, 0, 2). Mutates the
+ * affected units' .status/.currentHp in place.
+ *
+ * @returns {{destroyedUnitIds: string[]}} anyone REFRESH_AURA's heal-as-damage
+ *   finished off - caller (GameState#standby) is responsible for removing
+ *   them and running the team-destroy check, same convention as
+ *   combat-resolution.js's resolveAttack/resolveHeal.
  */
-export function applyAuraEffects(game, units, unit) {
+export function applyAuraEffects(game, rule, units, unit) {
   const hasAnyAura =
     hasAbility(unit, ABILITY.ATTACK_AURA) || hasAbility(unit, ABILITY.SLOWING_AURA) || hasAbility(unit, ABILITY.REFRESH_AURA);
-  if (!hasAnyAura) return;
+  if (!hasAnyAura) return { destroyedUnitIds: [] };
 
+  const destroyedUnitIds = [];
   for (const target of units) {
     if (target.id === unit.id || manhattanRange(unit, target) > 2) continue;
     const targetIsEnemy = isEnemy(game, unit.team, target.team);
@@ -373,10 +388,21 @@ export function applyAuraEffects(game, units, unit) {
     if (hasAbility(unit, ABILITY.SLOWING_AURA) && targetIsEnemy && !hasAbility(target, ABILITY.SLOWING_AURA)) {
       attachStatus(target, { type: STATUS.SLOWED, remainingTurn: 1 });
     }
-    if (hasAbility(unit, ABILITY.REFRESH_AURA) && !targetIsEnemy && isDebuffStatus(target.status)) {
-      clearStatus(target);
+    if (hasAbility(unit, ABILITY.REFRESH_AURA)) {
+      if (!targetIsEnemy && isDebuffStatus(target.status)) {
+        clearStatus(target);
+      }
+      if (canRefresh(game, unit, target)) {
+        const heal = getRefresherHeal(rule, unit, target);
+        target.currentHp += heal;
+        if (target.currentHp <= 0) {
+          target.currentHp = 0;
+          if (!destroyedUnitIds.includes(target.id)) destroyedUnitIds.push(target.id);
+        }
+      }
     }
   }
+  return { destroyedUnitIds };
 }
 
 /**

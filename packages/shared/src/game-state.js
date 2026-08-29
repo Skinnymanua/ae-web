@@ -17,7 +17,7 @@ import {
   getMovementPointCost,
   posKey,
 } from "./movement.js";
-import { canAttack, canCounter, applyAttack, isWithinRange } from "./combat-resolution.js";
+import { canAttack, canCounter, applyAttack, isWithinRange, canHeal, applyHeal, getMaxHp } from "./combat-resolution.js";
 import { ABILITY } from "./combat.js";
 import {
   calcIncome,
@@ -50,6 +50,8 @@ export const DEFAULT_RULE = {
   unitCapacity: 15, // POPULATION_PRESET[0]
   enemyClear: true,
   castleClear: true,
+  healerBaseHeal: 40, // Rule.HEALER_BASE_HEAL - see combat-resolution.js's getHealerHeal
+  refreshBaseHeal: 10, // Rule.REFRESH_BASE_HEAL - see combat-resolution.js's getRefresherHeal
 };
 
 let nextUnitId = 1;
@@ -251,13 +253,38 @@ export class GameState {
     return createMovePath(this._board(), unit, moveMark, destX, destY);
   }
 
-  getAttackablePositions(unitId) {
+  /** `includeSelf`: adds the unit's own tile to the range set regardless of
+   * minAttackRange - needed for heal-targeting, where self-heal is always
+   * allowed (see GameState#getHealablePositions below and
+   * movement.js's createAttackablePositions). */
+  getAttackablePositions(unitId, includeSelf = false) {
     const unit = this.getUnit(unitId);
-    return createAttackablePositions(this._board(), unit);
+    return createAttackablePositions(this._board(), unit, includeSelf);
   }
 
   canAttack(attackerId, defenderId) {
     return canAttack(this, this.getUnit(attackerId), this.getUnit(defenderId));
+  }
+
+  /** Positions within healerId's own attack range - PLUS its own tile,
+   * self-heal is always allowed - that hold a valid heal target: an ally (or
+   * itself) not already overflowing max HP, or an UNDEAD enemy (heal becomes
+   * damage against them). Ported from GameManager#hasAllyCanHealWithinRange,
+   * generalized to return the full set rather than just a boolean. Empty for
+   * a non-HEALER, since canHeal always fails for those regardless of target. */
+  getHealablePositions(healerId) {
+    const positions = this.getAttackablePositions(healerId, true);
+    const result = new Set();
+    for (const key of positions) {
+      const [x, y] = key.split(",").map(Number);
+      const target = this.getUnitAt(x, y);
+      if (target && canHeal(this, this.getUnit(healerId), target)) result.add(key);
+    }
+    return result;
+  }
+
+  canHeal(healerId, targetId) {
+    return canHeal(this, this.getUnit(healerId), this.getUnit(targetId));
   }
 
   // --- Mutating actions -------------------------------------------------
@@ -291,6 +318,15 @@ export class GameState {
     return result;
   }
 
+  /** Resolves a full heal action (heal, or heal-as-damage against an UNDEAD
+   * target - possibly lethal, win-condition check included). See
+   * combat-resolution.js's applyHeal/resolveHeal for the split logic. */
+  heal(healerId, targetId) {
+    const result = applyHeal(this, this.rule, this.units, this._mapInfo(), healerId, targetId);
+    this._syncTileRefs();
+    return result;
+  }
+
   /** Captures a castle/village tile for the conqueror's team. */
   occupy(unitId, x, y) {
     const unit = this.getUnit(unitId);
@@ -315,13 +351,40 @@ export class GameState {
    * Also runs the tomb hazard check (turn.js's applyTombHazard) for the same
    * reason: standing on a grave and going standby is what triggers it in the
    * original, whether or not the unit has anything to do with necromancy.
+   *
+   * And clamps the standing-by unit's own HP down to max if it's currently
+   * overflowing - ported from OperationExecutor#onStandby's overflow check:
+   * a Paladin's heal (see combat-resolution.js's getHealerHeal) can push an
+   * ally above their normal max HP; the first time THAT unit goes standby
+   * again, the excess is trimmed off, regardless of what action it just took.
    */
   standby(unitId) {
     const unit = this.getUnit(unitId);
     if (!unit) return;
     unit.standby = true;
-    applyAuraEffects(this, this.units, unit);
+
+    const maxHp = getMaxHp(unit);
+    if (unit.currentHp > maxHp) unit.currentHp = maxHp;
+
+    const { destroyedUnitIds } = applyAuraEffects(this, this.rule, this.units, unit);
     applyTombHazard(this, unit);
+
+    if (destroyedUnitIds.length) {
+      // REFRESH_AURA's heal-as-damage (see applyAuraEffects) can kill a
+      // nearby UNDEAD enemy - same death bookkeeping as attack()/heal(),
+      // just without a single "attacker/defender" pair to key the team check
+      // off of, since anyone within range could have been hit.
+      const affectedTeams = new Set(
+        destroyedUnitIds.map((id) => this.units.find((u) => u.id === id)?.team).filter((t) => t !== undefined)
+      );
+      const remaining = this.units.filter((u) => !destroyedUnitIds.includes(u.id));
+      this.units.length = 0;
+      this.units.push(...remaining);
+      for (const team of affectedTeams) {
+        checkTeamDestroy(this, this.units, this._mapInfo(), team);
+      }
+      this._syncTileRefs();
+    }
   }
 
   /** Positions within summonerId's own attack range that currently hold an

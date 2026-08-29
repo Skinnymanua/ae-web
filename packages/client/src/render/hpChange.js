@@ -19,7 +19,7 @@
  * for this pass), so refreshUnits()'s subsequent redraw is what actually
  * removes it, right after the number finishes floating.
  */
-import { TILE_SIZE, BOARD_OFFSET_Y } from "../constants.js";
+import { TILE_SIZE, BOARD_OFFSET_Y, DEPTH } from "../constants.js";
 
 const Y_OFFSET = [2, 0, -1, -1, -2, -2, -2, -2, -1, -1, 0, 1, 2, 4, 6, 4, 3, 4, 6, 6, 6, 6];
 const FRAME_DURATION_MS = 1000 / 30; // original's `1f/30` per-frame step
@@ -60,6 +60,13 @@ export function animateHpChanges(scene, changes, onComplete) {
       const sprite = scene.add.sprite(baseX + i * LCHAR_WIDTH, baseY, "chars_large", frame);
       sprite.setOrigin(0, 0);
       sprite.setDisplaySize(LCHAR_WIDTH, LCHAR_HEIGHT);
+      // Explicit depth, matching every other per-unit overlay (see
+      // constants.js's DEPTH comment on why this project doesn't rely on
+      // creation order) - without it this falls back to Phaser's default (0),
+      // rendering BENEATH the unit sprites (DEPTH.UNITS) it's meant to float
+      // above. CURSOR tier is a reasonable fit: same "temporary overlay on
+      // top of a unit" role the selection/attack-target cursor already has.
+      sprite.setDepth(DEPTH.CURSOR);
       sprite.setData("baseY", baseY);
       sprites.push(sprite);
     });

@@ -1,4 +1,5 @@
 import { animateUnitMove, refreshUnits } from "../render/units.js";
+import { animateHpChanges } from "../render/hpChange.js";
 import { showActionBar, finishUnitAction, clearActionBar } from "../ui/actionBar.js";
 import { showBuyMenu } from "../ui/dialogs.js";
 import { updateInfoText } from "../ui/hud.js";
@@ -88,6 +89,11 @@ export function onTileClick(scene, x, y) {
 
   if (scene.summonTargetMode) {
     handleSummonTargetClick(scene, x, y);
+    return;
+  }
+
+  if (scene.healTargetMode) {
+    handleHealTargetClick(scene, x, y);
     return;
   }
 
@@ -184,13 +190,87 @@ function previewAttackTarget(scene, target) {
   updateStatsPanel(scene, target);
 }
 
+/**
+ * Builds the [{x,y,change}] shape render/hpChange.js's animateHpChanges
+ * expects from an ATTACK/HEAL result's `events` - positions are captured by
+ * the caller BEFORE the game_ call runs (see confirmPendingAttack/Heal
+ * below), since a killing blow already removes the dead unit from
+ * game_.units by the time the result comes back, making a live position
+ * lookup unreliable for exactly the most dramatic case.
+ */
+function hpChangeFromEvent(event, positionsById) {
+  const pos = positionsById[event.type === "HEAL" ? event.targetId : event.defenderId];
+  if (!pos) return null;
+  const change = event.type === "HEAL" ? event.change : -event.damage;
+  return { unitId: pos.id, x: pos.x, y: pos.y, change };
+}
+
 function confirmPendingAttack(scene, attacker, target) {
-  scene.game_.attack(attacker.id, target.id);
+  const positionsById = {
+    [attacker.id]: { id: attacker.id, x: attacker.x, y: attacker.y },
+    [target.id]: { id: target.id, x: target.x, y: target.y },
+  };
+  const result = scene.game_.attack(attacker.id, target.id);
   scene.attackTargetMode = false;
   scene.pendingAttackTarget = null;
   clearHighlights(scene);
   clearSelectedTileHighlight(scene);
-  finishUnitAction(scene, attacker);
+
+  // Played BEFORE finishUnitAction's refreshUnits() - see hpChange.js's own
+  // docstring on why: a unit destroyed by this exchange needs to still be on
+  // screen for its number to float over, and refreshUnits() is what actually
+  // removes its sprite once the animation finishes.
+  const hpChanges = result.events.filter((e) => e.type === "ATTACK").map((e) => hpChangeFromEvent(e, positionsById)).filter(Boolean);
+  animateHpChanges(scene, hpChanges, () => finishUnitAction(scene, attacker));
+}
+
+/** Same two-click preview/confirm shape as attack above, for Heal. A click on
+ * the healer's own tile works the same way as any other valid target -
+ * self-heal is just canHeal(healer, healer) being true (see
+ * GameState#getHealablePositions). */
+function handleHealTargetClick(scene, x, y) {
+  const healer = scene._pendingHealer;
+  const target = scene.game_.getUnitAt(x, y);
+
+  if (target && scene.game_.canHeal(healer.id, target.id)) {
+    if (scene.pendingHealTarget === target.id) {
+      confirmPendingHeal(scene, healer, target);
+      return;
+    }
+    previewHealTarget(scene, target);
+    return;
+  }
+
+  // invalid target — back out to the action bar rather than force a finish
+  scene.healTargetMode = false;
+  scene.pendingHealTarget = null;
+  clearHighlights(scene);
+  selectUnitForStats(scene, healer);
+  showActionBar(scene, healer, healer.x, healer.y);
+}
+
+/** Same cursor/stats preview as attack's - the original reuses the exact
+ * same attack_cursor for heal-targeting too (see GameScreen's STATE_HEAL
+ * cursor branch), not a distinct heal cursor. */
+function previewHealTarget(scene, target) {
+  scene.pendingHealTarget = target.id;
+  showCursor(scene, target.x, target.y, "cursor_attack");
+  updateStatsPanel(scene, target);
+}
+
+function confirmPendingHeal(scene, healer, target) {
+  const positionsById = {
+    [healer.id]: { id: healer.id, x: healer.x, y: healer.y },
+    [target.id]: { id: target.id, x: target.x, y: target.y },
+  };
+  const result = scene.game_.heal(healer.id, target.id);
+  scene.healTargetMode = false;
+  scene.pendingHealTarget = null;
+  clearHighlights(scene);
+  clearSelectedTileHighlight(scene);
+
+  const hpChanges = result.events.filter((e) => e.type === "HEAL").map((e) => hpChangeFromEvent(e, positionsById)).filter(Boolean);
+  animateHpChanges(scene, hpChanges, () => finishUnitAction(scene, healer));
 }
 
 /**

@@ -67,6 +67,21 @@ export function enterSummonTargetMode(scene, unit) {
   highlightPositionSet(scene, scene.game_.getSummonablePositions(unit.id), 0x9933cc, 0.4);
 }
 
+/** Same shape as enterAttackTargetMode above, for the Heal action -
+ * highlights valid heal targets within the healer's own attack range PLUS
+ * its own tile (self-heal - see GameState#getHealablePositions) in green.
+ * Can include an enemy tile too (heal-as-damage against an UNDEAD enemy),
+ * so this doesn't filter by team the way attack's highlight implicitly
+ * does through getAttackableEnemyPositions - getHealablePositions already
+ * only returns tiles canHeal actually approves. */
+export function enterHealTargetMode(scene, unit) {
+  clearActionBar(scene);
+  scene.healTargetMode = true;
+  scene._pendingHealer = unit;
+  clearHighlights(scene);
+  highlightPositionSet(scene, scene.game_.getHealablePositions(unit.id), 0x33cc66, 0.4);
+}
+
 // Compass slots around the unit — confirmed against a real screenshot of the
 // commercial game (not in the open-source project_aeii repo at all — that one's a
 // plain centered horizontal row). Move is always "left" and standby always "top"
@@ -115,6 +130,9 @@ export function showActionBar(scene, unit, x, y) {
   // set here (not just a boolean) means enterSummonTargetMode below can
   // reuse it directly rather than recomputing.
   const summonable = scene.game_.getSummonablePositions(unit.id);
+  // Same idea for Heal - non-empty only for a HEALER with a valid target
+  // (an ally, itself, or an UNDEAD enemy) in range. See GameState#getHealablePositions.
+  const healable = scene.game_.getHealablePositions(unit.id);
 
   const otherActions = [];
   if (attackable.length > 0) {
@@ -122,6 +140,9 @@ export function showActionBar(scene, unit, x, y) {
   }
   if (summonable.size > 0) {
     otherActions.push({ frame: ACTION_ICON.SUMMON, onClick: () => enterSummonTargetMode(scene, unit) });
+  }
+  if (healable.size > 0) {
+    otherActions.push({ frame: ACTION_ICON.HEAL, onClick: () => enterHealTargetMode(scene, unit) });
   }
   if (canOccupy) {
     otherActions.push({
