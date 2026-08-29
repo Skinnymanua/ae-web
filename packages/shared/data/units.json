@@ -487,7 +487,12 @@
       "physicalDefence": 15,
       "magicDefence": 15,
       "movementPoint": 4,
-      "abilities": [],
+      "abilities": [
+        {
+          "id": 29,
+          "name": "SUPPORT"
+        }
+      ],
       "growth": {
         "hp": 0,
         "attack": 10,

@@ -17,7 +17,17 @@ import {
   getMovementPointCost,
   posKey,
 } from "./movement.js";
-import { canAttack, canCounter, applyAttack, isWithinRange, canHeal, applyHeal, getMaxHp } from "./combat-resolution.js";
+import {
+  canAttack,
+  canCounter,
+  applyAttack,
+  isWithinRange,
+  canHeal,
+  applyHeal,
+  getMaxHp,
+  canSupport,
+  resolveSupport,
+} from "./combat-resolution.js";
 import { ABILITY } from "./combat.js";
 import {
   calcIncome,
@@ -287,6 +297,28 @@ export class GameState {
     return canHeal(this, this.getUnit(healerId), this.getUnit(targetId));
   }
 
+  /** Positions within supporterId's own attack range that hold a valid
+   * Support target: an ally that has ALREADY gone standby this turn, isn't
+   * a CHARGER, isn't the commander, and isn't a higher level than the
+   * supporter. See combat-resolution.js's canSupport for the full rules
+   * (including why this never includes the supporter's own tile - a unit
+   * mid-action can't also be standby yet); this is a custom ability, not
+   * part of the original game. */
+  getSupportablePositions(supporterId) {
+    const positions = this.getAttackablePositions(supporterId, false);
+    const result = new Set();
+    for (const key of positions) {
+      const [x, y] = key.split(",").map(Number);
+      const target = this.getUnitAt(x, y);
+      if (target && canSupport(this, this.getUnit(supporterId), target)) result.add(key);
+    }
+    return result;
+  }
+
+  canSupport(supporterId, targetId) {
+    return canSupport(this, this.getUnit(supporterId), this.getUnit(targetId));
+  }
+
   // --- Mutating actions -------------------------------------------------
 
   /** Moves a unit along a path (as returned by getMovePath), consuming movement points. */
@@ -325,6 +357,15 @@ export class GameState {
     const result = applyHeal(this, this.rule, this.units, this._mapInfo(), healerId, targetId);
     this._syncTileRefs();
     return result;
+  }
+
+  /** Resolves a Support action: grants targetId a full fresh move (see
+   * combat-resolution.js's resolveSupport). No death/win-condition handling
+   * needed here - Support can't damage anyone. */
+  support(supporterId, targetId) {
+    const supporter = this.getUnit(supporterId);
+    const target = this.getUnit(targetId);
+    return resolveSupport(this, supporter, target);
   }
 
   /** Captures a castle/village tile for the conqueror's team. */

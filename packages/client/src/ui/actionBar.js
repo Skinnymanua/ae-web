@@ -8,6 +8,7 @@ import { refreshStatsPanel } from "./statsPanel.js";
 import { handleActionBarCancelClick } from "../input/boardInput.js";
 import { BOTTOM_BAR_HEIGHT } from "./bottomBar.js";
 import { panCameraToUnit, getCameraTargetForUnit } from "../render/camera.js";
+import { canMoveAgain } from "@ae/shared/src/combat.js";
 
 /** Returns [{x,y}] of enemy-occupied tiles within `unit`'s attack range. */
 function getAttackableEnemyPositions(scene, unit) {
@@ -47,6 +48,40 @@ export function finishUnitAction(scene, unit) {
   refreshStatsPanel(scene);
 }
 
+/**
+ * Called after attack/heal/summon/occupy resolve (never after an explicit
+ * Standby click - see combat.js's canMoveAgain docstring for why). A
+ * CHARGER unit that survived its own action and still has movement points
+ * left over gets to reposition before its turn actually ends - ported from
+ * OperationExecutor#onActionFinish's canMoveAgain branch (STATE_REMOVE).
+ * Otherwise this is just finishUnitAction.
+ */
+export function finishUnitActionOrCharge(scene, unit) {
+  if (!canMoveAgain(unit)) {
+    finishUnitAction(scene, unit);
+    return;
+  }
+  enterChargerMoveMode(scene, unit);
+}
+
+/**
+ * Highlights wherever `unit` can still reach with its LEFTOVER movement
+ * points (not reset to max - that's the whole point of canMoveAgain) in the
+ * same yellow as normal movement selection, but deliberately WITHOUT the red
+ * extended-attack overlay normal selection also shows: a charger's bonus
+ * move can only end the turn once resolved (see input/boardInput.js's
+ * confirmChargerMove going straight to finishUnitAction, no action bar
+ * shown again - ported from OperationExecutor#onMoveFinish's STATE_REMOVE
+ * branch), so it can never be followed by another attack.
+ */
+function enterChargerMoveMode(scene, unit) {
+  scene.chargerMoveMode = true;
+  scene._pendingCharger = unit;
+  clearHighlights(scene);
+  const { positions } = scene.game_.getMovablePositions(unit.id);
+  highlightPositionSet(scene, positions, 0xffcc33, 0.45);
+}
+
 export function enterAttackTargetMode(scene, unit) {
   clearActionBar(scene);
   scene.attackTargetMode = true;
@@ -80,6 +115,21 @@ export function enterHealTargetMode(scene, unit) {
   scene._pendingHealer = unit;
   clearHighlights(scene);
   highlightPositionSet(scene, scene.game_.getHealablePositions(unit.id), 0x33cc66, 0.4);
+}
+
+/** Same shape as enterHealTargetMode above, for the Druid's Support ability
+ * (a custom addition - see combat.js's ABILITY.SUPPORT comment). Highlights
+ * valid support targets - an ally that's ALREADY gone standby this turn,
+ * within the Druid's own attack range, that isn't a CHARGER, isn't the
+ * commander, and isn't a higher level than the Druid (see
+ * GameState#getSupportablePositions) - in a distinct blue so it doesn't
+ * read as either heal or attack. */
+export function enterSupportTargetMode(scene, unit) {
+  clearActionBar(scene);
+  scene.supportTargetMode = true;
+  scene._pendingSupporter = unit;
+  clearHighlights(scene);
+  highlightPositionSet(scene, scene.game_.getSupportablePositions(unit.id), 0x3399ff, 0.4);
 }
 
 // Compass slots around the unit — confirmed against a real screenshot of the
@@ -133,6 +183,9 @@ export function showActionBar(scene, unit, x, y) {
   // Same idea for Heal - non-empty only for a HEALER with a valid target
   // (an ally, itself, or an UNDEAD enemy) in range. See GameState#getHealablePositions.
   const healable = scene.game_.getHealablePositions(unit.id);
+  // Same idea for Support (custom addition) - non-empty only for a
+  // SUPPORT-carrying unit with a valid target in range. See GameState#getSupportablePositions.
+  const supportable = scene.game_.getSupportablePositions(unit.id);
 
   const otherActions = [];
   if (attackable.length > 0) {
@@ -144,13 +197,16 @@ export function showActionBar(scene, unit, x, y) {
   if (healable.size > 0) {
     otherActions.push({ frame: ACTION_ICON.HEAL, onClick: () => enterHealTargetMode(scene, unit) });
   }
+  if (supportable.size > 0) {
+    otherActions.push({ frame: ACTION_ICON.SUPPORT, onClick: () => enterSupportTargetMode(scene, unit) });
+  }
   if (canOccupy) {
     otherActions.push({
       frame: ACTION_ICON.OCCUPY,
       onClick: () => {
         scene.game_.occupy(unit.id, x, y);
         refreshTileTexture(scene, x, y);
-        finishUnitAction(scene, unit);
+        finishUnitActionOrCharge(scene, unit);
       },
     });
   }

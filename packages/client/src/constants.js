@@ -8,7 +8,7 @@ export const BOARD_OFFSET_Y = 76;
 // matching ResourceManager#getActionIcon usage in the original's ActionButtonBar.java.
 // Frame indices within icons_action.png (128x16 = 8 frames of 16x16),
 // matching ResourceManager#getActionIcon usage in the original's ActionButtonBar.java.
-export const ACTION_ICON = { BUY: 0, OCCUPY: 1, ATTACK: 2, SUMMON: 3, STANDBY: 5, HEAL: 7 };
+export const ACTION_ICON = { BUY: 0, OCCUPY: 1, ATTACK: 2, SUMMON: 3, STANDBY: 5, SUPPORT: 6, HEAL: 7 };
 
 // Two more frames from that same sheet (heart, 4-way move arrows) aren't used by the
 // action bar itself but are the right icons for the top stats bar's HP/Move rows.

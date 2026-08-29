@@ -1,6 +1,6 @@
 import { animateUnitMove, refreshUnits } from "../render/units.js";
 import { animateHpChanges } from "../render/hpChange.js";
-import { showActionBar, finishUnitAction, clearActionBar } from "../ui/actionBar.js";
+import { showActionBar, finishUnitAction, finishUnitActionOrCharge, clearActionBar } from "../ui/actionBar.js";
 import { showBuyMenu } from "../ui/dialogs.js";
 import { updateInfoText } from "../ui/hud.js";
 import { updateStatsPanel, refreshStatsPanel } from "../ui/statsPanel.js";
@@ -94,6 +94,16 @@ export function onTileClick(scene, x, y) {
 
   if (scene.healTargetMode) {
     handleHealTargetClick(scene, x, y);
+    return;
+  }
+
+  if (scene.supportTargetMode) {
+    handleSupportTargetClick(scene, x, y);
+    return;
+  }
+
+  if (scene.chargerMoveMode) {
+    handleChargerMoveClick(scene, x, y);
     return;
   }
 
@@ -221,7 +231,7 @@ function confirmPendingAttack(scene, attacker, target) {
   // screen for its number to float over, and refreshUnits() is what actually
   // removes its sprite once the animation finishes.
   const hpChanges = result.events.filter((e) => e.type === "ATTACK").map((e) => hpChangeFromEvent(e, positionsById)).filter(Boolean);
-  animateHpChanges(scene, hpChanges, () => finishUnitAction(scene, attacker));
+  animateHpChanges(scene, hpChanges, () => finishUnitActionOrCharge(scene, attacker));
 }
 
 /** Same two-click preview/confirm shape as attack above, for Heal. A click on
@@ -270,7 +280,54 @@ function confirmPendingHeal(scene, healer, target) {
   clearSelectedTileHighlight(scene);
 
   const hpChanges = result.events.filter((e) => e.type === "HEAL").map((e) => hpChangeFromEvent(e, positionsById)).filter(Boolean);
-  animateHpChanges(scene, hpChanges, () => finishUnitAction(scene, healer));
+  animateHpChanges(scene, hpChanges, () => finishUnitActionOrCharge(scene, healer));
+}
+
+/** Same two-click preview/confirm shape as Heal above, for the Druid's
+ * Support ability (custom addition - see combat.js's ABILITY.SUPPORT
+ * comment). Never targets the Druid itself - see canSupport's standby
+ * requirement in combat-resolution.js. */
+function handleSupportTargetClick(scene, x, y) {
+  const supporter = scene._pendingSupporter;
+  const target = scene.game_.getUnitAt(x, y);
+
+  if (target && scene.game_.canSupport(supporter.id, target.id)) {
+    if (scene.pendingSupportTarget === target.id) {
+      confirmPendingSupport(scene, supporter, target);
+      return;
+    }
+    previewSupportTarget(scene, target);
+    return;
+  }
+
+  // invalid target — back out to the action bar rather than force a finish
+  scene.supportTargetMode = false;
+  scene.pendingSupportTarget = null;
+  clearHighlights(scene);
+  selectUnitForStats(scene, supporter);
+  showActionBar(scene, supporter, supporter.x, supporter.y);
+}
+
+/** Same cursor/stats preview pattern as attack/heal - reuses cursor_attack,
+ * no dedicated support cursor exists (there wasn't one for heal either). */
+function previewSupportTarget(scene, target) {
+  scene.pendingSupportTarget = target.id;
+  showCursor(scene, target.x, target.y, "cursor_attack");
+  updateStatsPanel(scene, target);
+}
+
+/** Support doesn't change anyone's HP, so unlike attack/heal there's no
+ * animateHpChanges step here - just the state change (target's movement
+ * reset, standby cleared) and a full refresh so that shows up visually
+ * (an un-standbyed target's greyed-out tint needs to clear too). */
+function confirmPendingSupport(scene, supporter, target) {
+  scene.game_.support(supporter.id, target.id);
+  scene.supportTargetMode = false;
+  scene.pendingSupportTarget = null;
+  clearHighlights(scene);
+  clearSelectedTileHighlight(scene);
+  refreshUnits(scene);
+  finishUnitActionOrCharge(scene, supporter);
 }
 
 /**
@@ -290,7 +347,7 @@ function handleSummonTargetClick(scene, x, y) {
     clearSelectedTileHighlight(scene);
     refreshUnits(scene);
     updateInfoText(scene);
-    finishUnitAction(scene, summoner);
+    finishUnitActionOrCharge(scene, summoner);
     return;
   }
 
@@ -489,5 +546,61 @@ function confirmPendingMove(scene, selectedUnit, x, y) {
     selectUnitForStats(scene, selectedUnit); // selectedUnit.x/y are updated by moveUnit()
     scene.actionOrigin = origin;
     showActionBar(scene, selectedUnit, x, y);
+  });
+}
+
+/**
+ * Same two-click preview/confirm shape as normal movement above
+ * (previewMovePath/confirmPendingMove), for a CHARGER unit's post-action
+ * bonus move - see ui/actionBar.js's enterChargerMoveMode. The unit's own
+ * tile is just one more entry in the movable set here (createMovablePositions
+ * always includes the starting tile), so "stay put" needs no special-casing
+ * the way a normal move's own-tile click does (there's no action bar to
+ * open by staying - confirmChargerMove always ends the turn either way).
+ */
+function handleChargerMoveClick(scene, x, y) {
+  const charger = scene._pendingCharger;
+  const { positions } = scene.game_.getMovablePositions(charger.id);
+
+  if (positions.has(`${x},${y}`)) {
+    if (scene.pendingChargerMoveTarget && scene.pendingChargerMoveTarget.x === x && scene.pendingChargerMoveTarget.y === y) {
+      confirmChargerMove(scene, charger, x, y);
+      return;
+    }
+    previewChargerMovePath(scene, charger, x, y);
+    return;
+  }
+
+  // An invalid click just stays in this mode, waiting for a valid one - the
+  // original doesn't offer an early way out of STATE_REMOVE (GameScreen's
+  // click handler only falls back to cancelMovePhase for STATE_MOVE, not
+  // STATE_REMOVE - a charger's bonus move must be resolved, not backed out of).
+}
+
+function previewChargerMovePath(scene, unit, x, y) {
+  const path = scene.game_.getMovePath(unit.id, x, y);
+  scene.pendingChargerMoveTarget = { x, y };
+  clearPathPreview(scene);
+  scene.pathPreviewRects = path.map((step) => addHighlight(scene, step.x, step.y, 0xdd4444, 0.5));
+  showCursor(scene, x, y, "cursor_move_preview");
+}
+
+function confirmChargerMove(scene, unit, x, y) {
+  const path = scene.game_.getMovePath(unit.id, x, y);
+  clearHighlights(scene);
+  clearPathPreview(scene);
+  scene.chargerMoveMode = false;
+  scene._pendingCharger = null;
+  scene.pendingChargerMoveTarget = null;
+  animateUnitMove(scene, unit, path, () => {
+    scene.game_.moveUnit(unit.id, path);
+    refreshUnits(scene);
+    updateInfoText(scene);
+    // Straight to standby - no action bar, no re-check of canMoveAgain -
+    // matching OperationExecutor#onMoveFinish's STATE_REMOVE branch calling
+    // onStandby directly, unlike a normal confirmed move which returns to
+    // STATE_ACTION. Uses finishUnitAction (not finishUnitActionOrCharge):
+    // a charger's bonus move never chains into another one.
+    finishUnitAction(scene, unit);
   });
 }

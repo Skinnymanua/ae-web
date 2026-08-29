@@ -165,6 +165,12 @@ export class BoardScene extends Phaser.Scene {
     this._pendingSummoner = null;
     this.healTargetMode = false;
     this._pendingHealer = null;
+    this.supportTargetMode = false;
+    this._pendingSupporter = null;
+    this.pendingSupportTarget = null;
+    this.chargerMoveMode = false;
+    this._pendingCharger = null;
+    this.pendingChargerMoveTarget = null;
     this.highlightRects = [];
     this.pathPreviewRects = [];
     this.unitSprites = {};

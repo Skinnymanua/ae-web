@@ -96,6 +96,43 @@ export function canCounter(game, attacker, defender) {
   return isWithinRange(defender, attacker.x, attacker.y) && manhattanRange(defender, attacker) === 1;
 }
 
+// --- Support (custom addition - NOT part of the original 29 abilities; see
+// combat.js's ABILITY.SUPPORT comment) -----------------------------------
+
+/**
+ * The Druid's Support ability: targets an ally that has ALREADY gone
+ * standby this turn (already finished acting) - Support reactivates a spent
+ * unit for a bonus move, it's not a way to boost someone who hasn't acted
+ * yet. Target also can't be a CHARGER (already gets its own bonus move -
+ * see combat.js's canMoveAgain), can't be the commander, and can't be a
+ * higher level than the supporting Druid. Note this naturally rules out
+ * self-targeting too: the Druid using Support is always mid-action itself
+ * (not yet standby), so it can never satisfy its own check.
+ */
+export function canSupport(game, supporter, target) {
+  if (!supporter || !target) return false;
+  if (!hasAbility(supporter, ABILITY.SUPPORT)) return false;
+  if (isEnemyUnit(game, supporter, target)) return false;
+  if (!target.standby) return false;
+  if (hasAbility(target, ABILITY.CHARGER)) return false;
+  if (hasAbility(target, ABILITY.COMMANDER)) return false;
+  return target.level <= supporter.level;
+}
+
+/**
+ * Resets target's movement to its full max and clears its standby flag,
+ * letting it act again this turn - a full reset, not leftover points like
+ * CHARGER's bonus move. Mutates target in place.
+ */
+export function resolveSupport(game, supporter, target) {
+  if (!canSupport(game, supporter, target)) {
+    throw new Error("resolveSupport: support not allowed (check canSupport before calling)");
+  }
+  target.currentMovementPoint = target.maxMovementPoint;
+  target.standby = false;
+  return { supporterId: supporter.id, targetId: target.id };
+}
+
 // --- Healing -----------------------------------------------------------
 
 // Ported from GameCore#canHealReachTarget: a non-AIR_FORCE healer can't reach

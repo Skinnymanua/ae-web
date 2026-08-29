@@ -39,6 +39,10 @@ export const ABILITY = {
   BLINDER: 26,
   REHABILITATION: 27,
   HARD_SKIN: 28,
+  // Not part of the original 29 abilities (0-28) - a custom addition for
+  // this port's Druid. See combat-resolution.js's canSupport/getSupportTargetPositions
+  // for the full rules.
+  SUPPORT: 29,
 };
 
 export const TILE_TYPE = { LAND: 0, WATER: 1, FOREST: 2, MOUNTAIN: 3 };
@@ -113,6 +117,19 @@ export function attachAttackStatus(attacker, defender) {
 
 function hasAbility(unit, abilityId) {
   return unit.abilities?.some((a) => (typeof a === "object" ? a.id === abilityId : a === abilityId));
+}
+
+/**
+ * Ported from UnitToolkit#canMoveAgain: a CHARGER unit that survives its own
+ * action and still has movement points left over (e.g. it moved less than
+ * its full range before attacking) gets one more move immediately after -
+ * see ui/actionBar.js's finishUnitActionOrCharge. Never checked for an
+ * explicit Standby click - GameManager#doStandbySelectedUnit bypasses this
+ * entirely in the original (submits STANDBY directly, no ACTION_FINISH) -
+ * only after attack/heal/summon/occupy actually resolve.
+ */
+export function canMoveAgain(unit) {
+  return unit.currentHp > 0 && unit.currentMovementPoint > 0 && hasAbility(unit, ABILITY.CHARGER);
 }
 
 export function manhattanRange(a, b) {
