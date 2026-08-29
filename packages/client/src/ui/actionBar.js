@@ -22,6 +22,22 @@ function getAttackableEnemyPositions(scene, unit) {
   return result;
 }
 
+/** Returns [{x,y}] of empty, destroyable tiles within `unit`'s attack range -
+ * the DESTROYER's alternative attack target, alongside enemy units above.
+ * Ported from GameCore#canAttack's defender==null branch, which folds both
+ * cases into the SAME attack action rather than a separate one - see
+ * enterAttackTargetMode below highlighting both sets together. */
+function getDestroyableTilePositions(scene, unit) {
+  const positions = scene.game_.getAttackablePositions(unit.id);
+  const result = [];
+  for (const key of positions) {
+    const [tx, ty] = key.split(",").map(Number);
+    if (scene.game_.getUnitAt(tx, ty)) continue; // occupied - a unit attack, not a tile-destroy target
+    if (scene.game_.canDestroyTile(unit.id, tx, ty)) result.push({ x: tx, y: ty });
+  }
+  return result;
+}
+
 export function clearActionBar(scene) {
   if (scene.actionBarContainer) {
     scene.actionBarContainer.destroy();
@@ -82,6 +98,10 @@ function enterChargerMoveMode(scene, unit) {
   highlightPositionSet(scene, positions, 0xffcc33, 0.45);
 }
 
+/** Highlights every tile within unit's attack range in red - enemy units AND,
+ * for a DESTROYER, empty destroyable tiles are both valid targets within this
+ * same range (see getDestroyableTilePositions above), so the full range set
+ * is highlighted indiscriminately rather than filtering to just enemies. */
 export function enterAttackTargetMode(scene, unit) {
   clearActionBar(scene);
   scene.attackTargetMode = true;
@@ -166,7 +186,12 @@ export function showActionBar(scene, unit, x, y) {
 
   const tile = scene.game_.getTileAt(x, y);
   const attackable = getAttackableEnemyPositions(scene, unit);
+  // Non-empty only for a DESTROYER with an empty, destroyable tile in range
+  // (see GameCore#canAttack's defender==null branch) - folded into the SAME
+  // Attack button/target-mode as enemy units, not a separate action.
+  const destroyableTiles = getDestroyableTilePositions(scene, unit);
   const canOccupy = scene.game_.canOccupyTile(unit.id, x, y);
+  const canRepairHere = scene.game_.canRepairTile(unit.id, x, y);
   // Buying via the action bar is gated to the commander/king specifically -
   // shared/game-state.js's canBuyUnit only checks tile ownership (any friendly
   // unit could technically trigger it), but the action-bar button itself should
@@ -188,7 +213,7 @@ export function showActionBar(scene, unit, x, y) {
   const supportable = scene.game_.getSupportablePositions(unit.id);
 
   const otherActions = [];
-  if (attackable.length > 0) {
+  if (attackable.length > 0 || destroyableTiles.length > 0) {
     otherActions.push({ frame: ACTION_ICON.ATTACK, onClick: () => enterAttackTargetMode(scene, unit) });
   }
   if (summonable.size > 0) {
@@ -205,6 +230,16 @@ export function showActionBar(scene, unit, x, y) {
       frame: ACTION_ICON.OCCUPY,
       onClick: () => {
         scene.game_.occupy(unit.id, x, y);
+        refreshTileTexture(scene, x, y);
+        finishUnitActionOrCharge(scene, unit);
+      },
+    });
+  }
+  if (canRepairHere) {
+    otherActions.push({
+      frame: ACTION_ICON.REPAIR,
+      onClick: () => {
+        scene.game_.repair(unit.id, x, y);
         refreshTileTexture(scene, x, y);
         finishUnitActionOrCharge(scene, unit);
       },

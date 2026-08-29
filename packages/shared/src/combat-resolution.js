@@ -78,7 +78,7 @@ export function isWithinRange(unit, x, y) {
 
 export function canAttack(game, attacker, defender) {
   if (!attacker || !isWithinRange(attacker, defender?.x ?? -1, defender?.y ?? -1)) return false;
-  if (!defender) return false; // tile-destroy targeting (DESTROYER ability) not ported yet — see note below
+  if (!defender) return false; // an empty tile is never a valid unit-attack target - see canDestroyTile below for the DESTROYER case
   return isEnemyUnit(game, attacker, defender);
 }
 
@@ -86,6 +86,31 @@ function isEnemyUnit(game, a, b) {
   const allianceA = game.players[a.team]?.alliance;
   const allianceB = game.players[b.team]?.alliance;
   return a.team >= 0 && b.team >= 0 && allianceA !== allianceB;
+}
+
+/**
+ * Ported from GameCore#canAttack's defender==null branch: a DESTROYER can
+ * target an empty, destroyable tile within its own attack range instead of
+ * a unit. No damage roll and no counter - there's nothing there to hit back
+ * with. See resolveDestroyTile below for what actually happens.
+ */
+export function canDestroyTile(attacker, x, y, tile) {
+  if (!attacker || !hasAbility(attacker, ABILITY.DESTROYER)) return false;
+  if (!isWithinRange(attacker, x, y)) return false;
+  return !!tile.destroyable;
+}
+
+/**
+ * Ported from OperationExecutor#onAttack's defender==null branch +
+ * GameEventExecutor#onTileDestroy: the new tile index to swap to (caller
+ * applies it, same convention as turn.js's resolveCapture/resolveRepair),
+ * and grants ATTACK_EXPERIENCE to the attacker - never KILL_EXPERIENCE,
+ * there's no unit death involved. Returns null if destroying isn't valid.
+ */
+export function resolveDestroyTile(rule, attacker, x, y, tile) {
+  if (!canDestroyTile(attacker, x, y, tile)) return null;
+  gainExperience(attacker, rule.attackExperience);
+  return tile.destroyedTileIndex ?? null;
 }
 
 export function canCounter(game, attacker, defender) {

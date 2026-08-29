@@ -27,6 +27,8 @@ import {
   getMaxHp,
   canSupport,
   resolveSupport,
+  canDestroyTile,
+  resolveDestroyTile,
 } from "./combat-resolution.js";
 import { ABILITY } from "./combat.js";
 import {
@@ -35,6 +37,8 @@ import {
   getUnitPrice,
   canOccupy,
   resolveCapture,
+  canRepair,
+  resolveRepair,
   nextTurn,
   isTeamAlive,
   checkTeamDestroy,
@@ -276,6 +280,38 @@ export class GameState {
     return canAttack(this, this.getUnit(attackerId), this.getUnit(defenderId));
   }
 
+  /** Whether attackerId (a DESTROYER) can target the empty, destroyable tile
+   * at (x, y) instead of a unit - see combat-resolution.js's canDestroyTile.
+   * Checks occupancy here too (the pure function doesn't - it mirrors
+   * GameCore#canAttack's structure, where that check lives in the caller,
+   * e.g. GameCore#canAttack's own defender==null branch, or this port's
+   * getDestroyableTilePositions client-side), so this stays correct even if
+   * called directly without pre-filtering. */
+  canDestroyTile(attackerId, x, y) {
+    if (this.getUnitAt(x, y)) return false;
+    const attacker = this.getUnit(attackerId);
+    const tile = this.getTileAt(x, y);
+    return canDestroyTile(attacker, x, y, tile);
+  }
+
+  /** Resolves a DESTROYER's tile-destroy action: swaps the tile to its
+   * destroyed index and grants the attacker ATTACK_EXPERIENCE. See
+   * combat-resolution.js's resolveDestroyTile. */
+  /** Resolves a DESTROYER's tile-destroy action: swaps the tile to its
+   * destroyed index and grants the attacker ATTACK_EXPERIENCE. See
+   * combat-resolution.js's resolveDestroyTile. Same occupancy guard as
+   * canDestroyTile above - resolveDestroyTile alone doesn't check it. */
+  destroyTile(attackerId, x, y) {
+    if (this.getUnitAt(x, y)) return false;
+    const attacker = this.getUnit(attackerId);
+    const tile = this.getTileAt(x, y);
+    const newIndex = resolveDestroyTile(this.rule, attacker, x, y, tile);
+    if (newIndex === null) return false;
+    this.tileIndices[x][y] = newIndex;
+    this._syncTileRefs();
+    return true;
+  }
+
   /** Positions within healerId's own attack range - PLUS its own tile,
    * self-heal is always allowed - that hold a valid heal target: an ally (or
    * itself) not already overflowing max HP, or an UNDEAD enemy (heal becomes
@@ -374,6 +410,18 @@ export class GameState {
     const tile = this.getTileAt(x, y);
     if (!canOccupy(this, unit, tile)) return false;
     const newIndex = resolveCapture(tile, unit.team);
+    if (newIndex === null) return false;
+    this.tileIndices[x][y] = newIndex;
+    this._syncTileRefs();
+    return true;
+  }
+
+  /** Repairs the destroyed tile unitId is standing on back to its neutral,
+   * functional (but uncaptured) form - see turn.js's canRepair/resolveRepair. */
+  repair(unitId, x, y) {
+    const unit = this.getUnit(unitId);
+    const tile = this.getTileAt(x, y);
+    const newIndex = resolveRepair(unit, tile);
     if (newIndex === null) return false;
     this.tileIndices[x][y] = newIndex;
     this._syncTileRefs();
@@ -536,6 +584,12 @@ export class GameState {
     const unit = this.getUnit(unitId);
     const tile = this.getTileAt(x, y);
     return canOccupy(this, unit, tile);
+  }
+
+  canRepairTile(unitId, x, y) {
+    const unit = this.getUnit(unitId);
+    const tile = this.getTileAt(x, y);
+    return canRepair(unit, tile);
   }
 
   /** Buys and places a new unit for `team` at (x, y). Validates gold/population AND that (x,y) is an owned, empty castle tile. */

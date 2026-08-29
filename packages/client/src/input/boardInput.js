@@ -13,6 +13,7 @@ import {
   clearSelectedTileHighlight,
   addHighlight,
   showCursor,
+  refreshTileTexture,
 } from "../render/tiles.js";
 
 /** Shows a unit's stats and rings its tile — the one place both stay in sync. */
@@ -183,9 +184,23 @@ function handleAttackTargetClick(scene, x, y) {
     return;
   }
 
+  // DESTROYER: an empty, destroyable tile is also a valid attack target -
+  // ported from GameCore#canAttack's defender==null branch. Tracked in its
+  // own field (an {x,y} pair, not a unit id) since there's no unit here to
+  // key off of - same two-click preview/confirm shape either way.
+  if (!target && scene.game_.canDestroyTile(attacker.id, x, y)) {
+    if (scene.pendingDestroyTarget && scene.pendingDestroyTarget.x === x && scene.pendingDestroyTarget.y === y) {
+      confirmPendingDestroyTile(scene, attacker, x, y);
+      return;
+    }
+    previewDestroyTileTarget(scene, x, y);
+    return;
+  }
+
   // invalid target — back out to the action bar rather than force a finish
   scene.attackTargetMode = false;
   scene.pendingAttackTarget = null;
+  scene.pendingDestroyTarget = null;
   clearHighlights(scene);
   selectUnitForStats(scene, attacker);
   showActionBar(scene, attacker, attacker.x, attacker.y);
@@ -232,6 +247,28 @@ function confirmPendingAttack(scene, attacker, target) {
   // removes its sprite once the animation finishes.
   const hpChanges = result.events.filter((e) => e.type === "ATTACK").map((e) => hpChangeFromEvent(e, positionsById)).filter(Boolean);
   animateHpChanges(scene, hpChanges, () => finishUnitActionOrCharge(scene, attacker));
+}
+
+/** Same cursor preview as previewAttackTarget above, for a DESTROYER's
+ * tile target - no unit to show stats for, so just the cursor. */
+function previewDestroyTileTarget(scene, x, y) {
+  scene.pendingDestroyTarget = { x, y };
+  showCursor(scene, x, y, "cursor_attack");
+}
+
+/** No HP change, no counter, no defending unit - just the tile swap and
+ * ATTACK_EXPERIENCE for the attacker (see combat-resolution.js's
+ * resolveDestroyTile), so this skips animateHpChanges entirely and goes
+ * straight to finishing the attacker's turn. */
+function confirmPendingDestroyTile(scene, attacker, x, y) {
+  scene.game_.destroyTile(attacker.id, x, y);
+  scene.attackTargetMode = false;
+  scene.pendingAttackTarget = null;
+  scene.pendingDestroyTarget = null;
+  clearHighlights(scene);
+  clearSelectedTileHighlight(scene);
+  refreshTileTexture(scene, x, y);
+  finishUnitActionOrCharge(scene, attacker);
 }
 
 /** Same two-click preview/confirm shape as attack above, for Heal. A click on

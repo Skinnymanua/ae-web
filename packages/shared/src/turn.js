@@ -196,6 +196,28 @@ export function canOccupy(game, conqueror, tile) {
   return false;
 }
 
+/**
+ * Ported from GameCore#canRepair: repairer needs REPAIRER ability, and the
+ * tile it's standing on must be repairable - in practice only ever true for
+ * a tile that's already been destroyed (see DESTROYER, not yet ported) and
+ * has a repairedTileIndex to swap back to (see tiles.json).
+ */
+export function canRepair(unit, tile) {
+  return !!unit && hasAbility(unit, ABILITY.REPAIRER) && !!tile.repairable;
+}
+
+/**
+ * Ported from GameEventExecutor#onRepair: the new tile index to swap to, or
+ * null if repair isn't valid. For a destroyed village this resets it to the
+ * NEUTRAL (uncaptured) tile, not back to whichever team had captured it
+ * before destruction - repair restores function, not ownership; the tile
+ * needs occupying again afterward, same as any other neutral village.
+ */
+export function resolveRepair(unit, tile) {
+  if (!canRepair(unit, tile)) return null;
+  return tile.repairedTileIndex ?? null;
+}
+
 // --- Win condition -------------------------------------------------------
 
 /**
@@ -330,6 +352,19 @@ function applyPoisonChange(unit, baseChange) {
 }
 
 /**
+ * Ported from OperationExecutor#onNextTurn's REHABILITATION handling: +25%
+ * of max HP every turn, stacking on top of whatever terrain heal/siege/
+ * poison already computed. Applied AFTER poison specifically, matching the
+ * original's exact ordering - a REHABILITATION unit that's also poisoned
+ * still gets this bonus added on top of the poison override, before the
+ * combined total goes through validateHpChange's clamp.
+ */
+function applyRehabilitation(unit, change) {
+  if (!hasAbility(unit, ABILITY.REHABILITATION)) return change;
+  return change + Math.floor(getMaxHp(unit) / 4);
+}
+
+/**
  * Ported from GameEventExecutor#onNextTurn's per-unit status handling, run
  * for each of the INCOMING team's own units alongside the hp-change loop
  * below: a debuff (poison/slow/blind) clears outright if the unit is
@@ -410,11 +445,12 @@ export function applyAuraEffects(game, rule, units, unit) {
  * then — for the INCOMING team's own units — applies terrain heal, castle
  * siege damage for any of them squatting on an enemy-owned castle (see
  * getCastleSiegeChange's note above for why this fires on the squatter's own
- * turn rather than OperationExecutor#onNextTurn's original schedule), and
- * poison damage (or healing, for UNDEAD) per applyPoisonChange above. Each
- * affected unit's status (poison/slow/blind/inspire) then ticks down or
- * clears via tickStatus, using the same "is this my own turn starting" gate
- * as everything else in this loop.
+ * turn rather than OperationExecutor#onNextTurn's original schedule),
+ * poison damage (or healing, for UNDEAD) per applyPoisonChange above, and a
+ * REHABILITATION bonus (maxHp/4, stacking on top of all of the above) per
+ * applyRehabilitation above. Each affected unit's status (poison/slow/
+ * blind/inspire) then ticks down or clears via tickStatus, using the same
+ * "is this my own turn starting" gate as everything else in this loop.
  *
  * Mutates `game` and each affected unit's currentHp/status. Does NOT remove destroyed
  * units or run the team-destroy check — same division of responsibility as
@@ -454,7 +490,7 @@ export function nextTurn(game, units, onNewRound) {
     resetUnitForTurn(game, unit);
     const tile = game.getTileAt(unit.x, unit.y);
     const baseChange = getTerrainHeal(game, unit, tile) + getCastleSiegeChange(game, unit, tile);
-    const change = validateHpChange(unit, applyPoisonChange(unit, baseChange));
+    const change = validateHpChange(unit, applyRehabilitation(unit, applyPoisonChange(unit, baseChange)));
     if (change !== 0) {
       unit.currentHp += change;
       hpChanges.push({ unitId: unit.id, x: unit.x, y: unit.y, change });
