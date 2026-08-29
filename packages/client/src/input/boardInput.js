@@ -1,5 +1,6 @@
 import { animateUnitMove, refreshUnits } from "../render/units.js";
 import { animateHpChanges } from "../render/hpChange.js";
+import { animateAttackHit, playAttackHitSequence } from "../render/attackEffect.js";
 import { showActionBar, finishUnitAction, finishUnitActionOrCharge, clearActionBar } from "../ui/actionBar.js";
 import { showBuyMenu } from "../ui/dialogs.js";
 import { updateInfoText } from "../ui/hud.js";
@@ -217,17 +218,17 @@ function previewAttackTarget(scene, target) {
 
 /**
  * Builds the [{x,y,change}] shape render/hpChange.js's animateHpChanges
- * expects from an ATTACK/HEAL result's `events` - positions are captured by
- * the caller BEFORE the game_ call runs (see confirmPendingAttack/Heal
- * below), since a killing blow already removes the dead unit from
- * game_.units by the time the result comes back, making a live position
- * lookup unreliable for exactly the most dramatic case.
+ * expects from a HEAL result's `events` - positions are captured by the
+ * caller BEFORE the game_ call runs (see confirmPendingHeal below), since a
+ * kill already removes the dead unit from game_.units by the time the
+ * result comes back, making a live position lookup unreliable for exactly
+ * the most dramatic case. Combat damage no longer goes through this - see
+ * render/attackEffect.js for why attack/counter uses a different effect.
  */
 function hpChangeFromEvent(event, positionsById) {
-  const pos = positionsById[event.type === "HEAL" ? event.targetId : event.defenderId];
+  const pos = positionsById[event.targetId];
   if (!pos) return null;
-  const change = event.type === "HEAL" ? event.change : -event.damage;
-  return { unitId: pos.id, x: pos.x, y: pos.y, change };
+  return { unitId: pos.id, x: pos.x, y: pos.y, change: event.change };
 }
 
 function confirmPendingAttack(scene, attacker, target) {
@@ -241,12 +242,23 @@ function confirmPendingAttack(scene, attacker, target) {
   clearHighlights(scene);
   clearSelectedTileHighlight(scene);
 
-  // Played BEFORE finishUnitAction's refreshUnits() - see hpChange.js's own
-  // docstring on why: a unit destroyed by this exchange needs to still be on
-  // screen for its number to float over, and refreshUnits() is what actually
-  // removes its sprite once the animation finishes.
-  const hpChanges = result.events.filter((e) => e.type === "ATTACK").map((e) => hpChangeFromEvent(e, positionsById)).filter(Boolean);
-  animateHpChanges(scene, hpChanges, () => finishUnitActionOrCharge(scene, attacker));
+  // Played BEFORE finishUnitAction's refreshUnits() - see attackEffect.js's
+  // own docstring on why: a unit destroyed by this exchange needs to still
+  // be on screen for the spark/shake to play over it, and refreshUnits() is
+  // what actually removes its sprite once the effect finishes. Combat
+  // damage uses the spark+shake+static-number effect (UnitAttackAnimator in
+  // the original), NOT the rising HpChangeAnimator style animateHpChanges
+  // gives Heal/end-of-turn changes - the two are deliberately different in
+  // the source, not just here.
+  const hits = result.events
+    .filter((e) => e.type === "ATTACK")
+    .map((e) => {
+      const pos = positionsById[e.defenderId];
+      if (!pos) return null;
+      return { targetUnitId: pos.id, x: pos.x, y: pos.y, damage: e.damage };
+    })
+    .filter(Boolean);
+  playAttackHitSequence(scene, hits, () => finishUnitActionOrCharge(scene, attacker));
 }
 
 /** Same cursor preview as previewAttackTarget above, for a DESTROYER's
@@ -258,8 +270,10 @@ function previewDestroyTileTarget(scene, x, y) {
 
 /** No HP change, no counter, no defending unit - just the tile swap and
  * ATTACK_EXPERIENCE for the attacker (see combat-resolution.js's
- * resolveDestroyTile), so this skips animateHpChanges entirely and goes
- * straight to finishing the attacker's turn. */
+ * resolveDestroyTile). Still plays the spark effect over the target tile
+ * though - matches the original's own submitUnitAttackAnimation(attacker,
+ * target_x, target_y) overload for this exact case: no target unit to
+ * jitter, no damage number, just the spark burst. */
 function confirmPendingDestroyTile(scene, attacker, x, y) {
   scene.game_.destroyTile(attacker.id, x, y);
   scene.attackTargetMode = false;
@@ -268,7 +282,7 @@ function confirmPendingDestroyTile(scene, attacker, x, y) {
   clearHighlights(scene);
   clearSelectedTileHighlight(scene);
   refreshTileTexture(scene, x, y);
-  finishUnitActionOrCharge(scene, attacker);
+  animateAttackHit(scene, null, x, y, null, () => finishUnitActionOrCharge(scene, attacker));
 }
 
 /** Same two-click preview/confirm shape as attack above, for Heal. A click on

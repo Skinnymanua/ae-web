@@ -129,6 +129,12 @@ export class BoardScene extends Phaser.Scene {
     // (not a spritesheet), drawn at full tile size the same way tile_N.png's
     // source resolution doesn't matter - see render/tiles.js's refreshTombs.
     this.load.image("tombstone", "/images/tombstone.png");
+    // Ported from android/assets/images/spark_attack.png - the attack-hit
+    // spark burst (6 frames of 20x20) - see render/attackEffect.js.
+    this.load.spritesheet("spark_attack", "/images/spark_attack.png", {
+      frameWidth: 20,
+      frameHeight: 20,
+    });
   }
 
   create() {
