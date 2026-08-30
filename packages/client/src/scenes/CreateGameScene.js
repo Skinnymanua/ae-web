@@ -7,9 +7,11 @@ import {
   MAX_LEVEL_OPTIONS,
   STARTING_GOLD_OPTIONS,
   UNIT_CAPACITY_OPTIONS,
+  PLAYER_COUNT_OPTIONS,
   DEFAULT_MAX_LEVEL,
   DEFAULT_STARTING_GOLD,
   DEFAULT_UNIT_CAPACITY,
+  DEFAULT_PLAYER_COUNT,
 } from "./skirmishSettings.js";
 
 /**
@@ -35,6 +37,7 @@ export class CreateGameScene extends Phaser.Scene {
     this.maxLevelIndex = data?.maxLevelIndex ?? MAX_LEVEL_OPTIONS.indexOf(DEFAULT_MAX_LEVEL);
     this.startingGoldIndex = data?.startingGoldIndex ?? STARTING_GOLD_OPTIONS.indexOf(DEFAULT_STARTING_GOLD);
     this.unitCapacityIndex = data?.unitCapacityIndex ?? UNIT_CAPACITY_OPTIONS.indexOf(DEFAULT_UNIT_CAPACITY);
+    this.playerCountIndex = data?.playerCountIndex ?? PLAYER_COUNT_OPTIONS.indexOf(DEFAULT_PLAYER_COUNT);
     this.sessionNameValue = data?.sessionNameValue ?? "";
     this.passwordValue = data?.passwordValue ?? "";
   }
@@ -103,7 +106,7 @@ export class CreateGameScene extends Phaser.Scene {
     this.updateSettingsSummary();
 
     const settingsButton = this.add
-      .text(startX, startY + 90, "[ Settings ]", { fontSize: "16px", color: "#44aaff" })
+      .text(startX, startY + 115, "[ Settings ]", { fontSize: "16px", color: "#44aaff" })
       .setInteractive();
     settingsButton.on("pointerup", (pointer, localX, localY, event) => {
       event.stopPropagation();
@@ -116,6 +119,7 @@ export class CreateGameScene extends Phaser.Scene {
       `Max Level: ${MAX_LEVEL_OPTIONS[this.maxLevelIndex]}`,
       `Starting Gold: ${STARTING_GOLD_OPTIONS[this.startingGoldIndex]}`,
       `Max Units: ${UNIT_CAPACITY_OPTIONS[this.unitCapacityIndex]}`,
+      `Players: ${PLAYER_COUNT_OPTIONS[this.playerCountIndex]}`,
     ];
     this.settingsSummaryText.setText(lines.join("\n"));
   }
@@ -126,6 +130,7 @@ export class CreateGameScene extends Phaser.Scene {
       maxLevelIndex: this.maxLevelIndex,
       startingGoldIndex: this.startingGoldIndex,
       unitCapacityIndex: this.unitCapacityIndex,
+      playerCountIndex: this.playerCountIndex,
       returnScene: "CreateGameScene",
       // Session name/password aren't part of the shared settings round trip
       // (SkirmishSettingsScene knows nothing about them) - carried through
@@ -136,7 +141,7 @@ export class CreateGameScene extends Phaser.Scene {
 
   buildSessionFields() {
     const startX = 420;
-    const startY = 220;
+    const startY = 260;
     this.add.text(startX, startY - 20, "Session Name", { fontSize: "14px", color: "#cccccc" });
     this.nameInput = createTextInput(this, startX, startY, { placeholder: "My Game" });
     this.nameInput.setValue(this.sessionNameValue);
@@ -204,6 +209,7 @@ export class CreateGameScene extends Phaser.Scene {
           maxLevel: MAX_LEVEL_OPTIONS[this.maxLevelIndex],
           startingGold: STARTING_GOLD_OPTIONS[this.startingGoldIndex],
           unitCapacity: UNIT_CAPACITY_OPTIONS[this.unitCapacityIndex],
+          maxPlayers: PLAYER_COUNT_OPTIONS[this.playerCountIndex],
           password: this.passwordValue || undefined,
         },
         "session_created"

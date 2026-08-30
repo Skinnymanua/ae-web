@@ -8,7 +8,7 @@
  *
  * Client -> server message types:
  *   { type: "list_sessions" }
- *   { type: "create_session", name, mapId, mapData, maxLevel, startingGold, unitCapacity, password? }
+ *   { type: "create_session", name, mapId, mapData, maxLevel, startingGold, unitCapacity, password?, maxPlayers? }  // maxPlayers clamped to [2,4], defaults to 2
  *   { type: "join_session", sessionId, password? }
  *   { type: "leave_session" }
  *   { type: "start_game" }
@@ -25,7 +25,7 @@
  *   { type: "player_joined", team }              // broadcast to whoever's already there
  *   { type: "player_disconnected", team }        // broadcast on a socket closing
  *   { type: "game_started" }                     // broadcast to both, in response to either one's start_game
- *   { type: "game_update", actionType, params, result, gameOver, gameState }  // broadcast after any action - gameState is a fresh full snapshot, always apply that, never recompute locally (RNG); params is the original request (e.g. moveUnit's path), needed by the RECEIVING client to know what to animate, since a bare boolean/void result alone often isn't enough
+ *   { type: "game_update", actionType, params, result, gameOver, winnerAlliance, gameState }  // broadcast after any action - gameState is a fresh full snapshot, always apply that, never recompute locally (RNG); params is the original request (e.g. moveUnit's path), needed by the RECEIVING client to know what to animate, since a bare boolean/void result alone often isn't enough; winnerAlliance is -1 unless gameOver is true
  *   { type: "action_error", reason }             // unknown_action | not_your_turn | not_your_unit
  *   { type: "error", message }                   // malformed/unhandled message
  */
@@ -90,8 +90,8 @@ function handleMessage(socket, message) {
     }
 
     case "create_session": {
-      const { name, mapId, mapData, maxLevel, startingGold, unitCapacity, password } = message;
-      const session = createSession({ name, mapId, mapData, maxLevel, startingGold, unitCapacity, password });
+      const { name, mapId, mapData, maxLevel, startingGold, unitCapacity, password, maxPlayers } = message;
+      const session = createSession({ name, mapId, mapData, maxLevel, startingGold, unitCapacity, password, maxPlayers });
       registerSocket(session.id, 0, socket);
       send(socket, { type: "session_created", session, team: 0, gameState: getSerializedGameState(session.id) });
       return;
@@ -154,6 +154,13 @@ function handleMessage(socket, message) {
         params: message.params,
         result: outcome.result.result,
         gameOver: outcome.gameOver,
+        // -1 when the game isn't over; otherwise the winning alliance
+        // number (see turn.js's getWinnerAlliance) - computed server-side
+        // in sessions.js's applySessionAction BEFORE the session gets torn
+        // down, since a game-ending action's gameState below is null and a
+        // client re-deriving this from its own (by-then-stale) game state
+        // would incorrectly see both teams still alive.
+        winnerAlliance: outcome.winnerAlliance,
         // A fresh full snapshot, not just the bare result - see
         // getSerializedGameState's own docstring for why clients should
         // apply THIS rather than recomputing the action themselves (RNG).

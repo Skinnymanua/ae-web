@@ -3,9 +3,11 @@ import {
   MAX_LEVEL_OPTIONS,
   STARTING_GOLD_OPTIONS,
   UNIT_CAPACITY_OPTIONS,
+  PLAYER_COUNT_OPTIONS,
   DEFAULT_MAX_LEVEL,
   DEFAULT_STARTING_GOLD,
   DEFAULT_UNIT_CAPACITY,
+  DEFAULT_PLAYER_COUNT,
 } from "./skirmishSettings.js";
 
 /**
@@ -30,6 +32,7 @@ export class SkirmishSettingsScene extends Phaser.Scene {
     this.maxLevelIndex = data?.maxLevelIndex ?? MAX_LEVEL_OPTIONS.indexOf(DEFAULT_MAX_LEVEL);
     this.startingGoldIndex = data?.startingGoldIndex ?? STARTING_GOLD_OPTIONS.indexOf(DEFAULT_STARTING_GOLD);
     this.unitCapacityIndex = data?.unitCapacityIndex ?? UNIT_CAPACITY_OPTIONS.indexOf(DEFAULT_UNIT_CAPACITY);
+    this.playerCountIndex = data?.playerCountIndex ?? PLAYER_COUNT_OPTIONS.indexOf(DEFAULT_PLAYER_COUNT);
     this.returnScene = data?.returnScene ?? "SkirmishSetupScene";
     this.returnExtra = data?.returnExtra ?? {};
   }
@@ -53,6 +56,9 @@ export class SkirmishSettingsScene extends Phaser.Scene {
     this.createStepperRow(startX, startY + 88, "Max Units", UNIT_CAPACITY_OPTIONS, this.unitCapacityIndex, (i) => {
       this.unitCapacityIndex = i;
     });
+    this.createStepperRow(startX, startY + 132, "Players", PLAYER_COUNT_OPTIONS, this.playerCountIndex, (i) => {
+      this.playerCountIndex = i;
+    });
 
     const backButton = this.add
       .text(width / 2, height - 50, "[ Back ]", { fontSize: "18px", color: "#dd4444" })
@@ -66,6 +72,7 @@ export class SkirmishSettingsScene extends Phaser.Scene {
         maxLevelIndex: this.maxLevelIndex,
         startingGoldIndex: this.startingGoldIndex,
         unitCapacityIndex: this.unitCapacityIndex,
+        playerCountIndex: this.playerCountIndex,
       });
     });
   }

@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { GameState } from "@ae/shared/src/game-state.js";
+import { getWinnerAlliance } from "@ae/shared/src/turn.js";
 import unitsData from "@ae/shared/data/units.json";
 import tilesData from "@ae/shared/data/tiles.json";
 import { MAPS } from "../maps/index.js";
@@ -45,6 +46,7 @@ export class BoardScene extends Phaser.Scene {
       this.maxLevel_ = data?.maxLevel ?? 3; // Rule.getDefaultRule()'s implicit cap
       this.startingGold_ = data?.startingGold ?? 300;
       this.unitCapacity_ = data?.unitCapacity ?? 15; // POPULATION_PRESET[0]
+      this.playerCount_ = data?.playerCount ?? 2;
     }
   }
 
@@ -206,18 +208,25 @@ export class BoardScene extends Phaser.Scene {
       setupNetworkedGameSync(this, unitsData.units, tilesData.tiles, (msg, previousGameState) =>
         this.onOpponentAction(msg, previousGameState)
       );
-      this.onGameOver = () => this.showNetworkedGameOver();
+      this.onGameOver = () => this.showGameOverScreen();
     } else {
       this.game_ = new GameState({
         mapData: this.mapData_,
         unitDefs: unitsData.units,
         tileDefs: tilesData.tiles,
-        players: [
-          { team: 0, type: 1, alliance: 0, gold: this.startingGold_ },
-          { team: 1, type: 1, alliance: 1, gold: this.startingGold_ },
-        ],
+        // One player per team, own alliance each - same convention
+        // server/src/sessions.js's createSession uses for networked
+        // sessions, generalized here to however many players local
+        // skirmish was set up for (was hardcoded to exactly 2).
+        players: Array.from({ length: this.playerCount_ }, (_, team) => ({
+          team,
+          type: 1,
+          alliance: team,
+          gold: this.startingGold_,
+        })),
         rule: { maxLevel: this.maxLevel_, unitCapacity: this.unitCapacity_ },
       });
+      this.onGameOver = () => this.showGameOverScreen();
     }
 
     // Whichever map SkirmishSetupScene passed in (see init() above) - covers
@@ -276,19 +285,74 @@ export class BoardScene extends Phaser.Scene {
     replayOpponentAction(this, msg, previousGameState);
   }
 
-  /** Bare-minimum "the game just ended" notice for networked play - the
-   * session file is already gone server-side by the time this fires (see
-   * server/src/sessions.js's applySessionAction), so there's nothing left
-   * to do here but tell the player. Deliberately simple: no win/lose
-   * breakdown UI, that's a further polish pass, not attempted here. */
-  showNetworkedGameOver() {
+  /**
+   * End-of-game screen for BOTH local skirmish and networked play - shown
+   * once scene.game_.gameOver is true (see net/runGameAction.js's two
+   * onGameOver call sites, one per mode, both wired to this same method).
+   * Reads the winner straight off the current game state rather than
+   * needing anything passed in - by the time this fires, scene.game_
+   * already reflects the game that just ended, in both modes.
+   *
+   * Networked sessions are already gone server-side by this point (see
+   * server/src/sessions.js's applySessionAction - "removed on
+   * victory/defeat"), so "Back to Menu" is the only meaningful action here;
+   * there's no game left to return to or leave gracefully, just the local
+   * socket to close.
+   */
+  showGameOverScreen() {
     const { width, height } = this.cameras.main;
-    this.add.rectangle(0, 0, width, height, 0x000000, 0.6).setScrollFactor(0).setDepth(1000);
+    this.modalOpen = true; // blocks further board/bottom-bar clicks - same flag ui/dialogs.js's own modals use
+
+    this.add.rectangle(0, 0, width, height, 0x000000, 0.65).setScrollFactor(0).setDepth(1000);
+
+    // getWinnerAlliance returns an ALLIANCE number, not a team number - for
+    // local skirmish and today's 2-player networked games these are the
+    // same thing (both SkirmishSetupScene and CreateGameScene assign each
+    // player alliance === team), so this is displayed as the winning team
+    // directly. Revisit this equivalence if/when true multi-team alliances
+    // (e.g. 2v2 in a 4-player game) exist - it would no longer hold then.
+    //
+    // Networked mode reads this from net/runGameAction.js's stashed
+    // net_.lastWinnerAlliance instead of recomputing it here - by the time
+    // this method runs, this.game_ never received the final game-ending
+    // update (its broadcast's gameState is null - the session's already
+    // gone server-side), so getWinnerAlliance(this.game_) would incorrectly
+    // still show both teams alive.
+    const winnerAlliance = this.networked_ ? this.net_.lastWinnerAlliance : getWinnerAlliance(this.game_);
+    const titleText = winnerAlliance >= 0 ? `Team ${winnerAlliance} Wins!` : "Game Over";
     this.add
-      .text(width / 2, height / 2, "Game Over", { fontSize: "32px", color: "#ffdd44", fontStyle: "bold" })
+      .text(width / 2, height / 2 - 30, titleText, { fontSize: "32px", color: "#ffdd44", fontStyle: "bold" })
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(1001);
+
+    if (this.networked_ && winnerAlliance >= 0) {
+      const won = winnerAlliance === this.net_.team;
+      this.add
+        .text(width / 2, height / 2 + 10, won ? "Victory!" : "Defeat", {
+          fontSize: "20px",
+          color: won ? "#44dd88" : "#dd4444",
+          fontStyle: "bold",
+        })
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(1001);
+    }
+
+    const backButton = this.add
+      .text(width / 2, height / 2 + 60, "[ Back to Menu ]", { fontSize: "18px", color: "#44aaff" })
+      .setOrigin(0.5)
+      .setInteractive()
+      .setScrollFactor(0)
+      .setDepth(1001);
+    backButton.on("pointerup", (pointer, localX, localY, event) => {
+      event.stopPropagation();
+      if (this.networked_ && this.net_?.socket) {
+        this.net_.socket.send("leave_session");
+        this.net_.socket.close();
+      }
+      this.scene.start("MenuScene");
+    });
   }
 
     update(time, delta) {

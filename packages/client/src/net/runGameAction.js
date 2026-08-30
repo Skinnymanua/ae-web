@@ -47,7 +47,17 @@ function argsToParams(actionType, args) {
 
 export function runGameAction(scene, actionType, ...args) {
   if (!scene.net_) {
-    return Promise.resolve(scene.game_[actionType](...args));
+    const result = scene.game_[actionType](...args);
+    // Checked here, centrally, same reasoning as the networked branch below
+    // (see setupNetworkedGameSync's own comment on scene.onGameOver) - every
+    // mutating action funnels through this one function, so this is the
+    // single place that needs to notice a LOCAL game just ended, rather
+    // than every individual confirm* function in input/boardInput.js
+    // remembering to check scene.game_.gameOver itself.
+    if (scene.game_.gameOver) {
+      scene.onGameOver?.();
+    }
+    return Promise.resolve(result);
   }
   const promise = new Promise((resolve, reject) => {
     scene.net_.pendingResolve = resolve;
@@ -87,7 +97,9 @@ export function runGameAction(scene, actionType, ...args) {
  * place a fatal hit's spark/shake at the right tile once the victim's
  * already gone from the fresh snapshot.
  *
- * scene.onGameOver, if set, is called whenever a broadcast reports the game
+ * scene.onGameOver, if set, is called (with no arguments - by the time it
+ * fires, scene.game_ already reflects the ended game, same as the local
+ * branch in runGameAction above) whenever a broadcast reports the game
  * ending - regardless of which client's action caused it, since
  * runGameAction's promise only resolves with msg.result (not the whole
  * message), so a game-ending action taken by THIS client wouldn't otherwise
@@ -118,7 +130,14 @@ export function setupNetworkedGameSync(scene, unitDefs, tileDefs, onOpponentActi
     // too, and runGameAction's own promise only resolves with msg.result
     // (not the whole message), so this is the one place both cases meet.
     if (msg.gameOver) {
-      scene.onGameOver?.(msg);
+      // Stashed on scene.net_ rather than re-derived from scene.game_ when
+      // onGameOver runs - a game-ending action's msg.gameState is null (see
+      // applySnapshot above), so scene.game_ never receives the update
+      // that would show the losing team actually destroyed; the server
+      // computes this BEFORE tearing the session down specifically so
+      // clients don't have to guess from a stale local state.
+      scene.net_.lastWinnerAlliance = msg.winnerAlliance;
+      scene.onGameOver?.();
     }
   });
 

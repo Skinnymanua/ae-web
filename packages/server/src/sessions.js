@@ -29,7 +29,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { GameState } from "@ae/shared/src/game-state.js";
-import { loadUnits, loadTiles } from "@ae/shared";
+import { loadUnits, loadTiles, getWinnerAlliance } from "@ae/shared";
 
 const SESSIONS_DIR = process.env.SESSIONS_DIR ?? path.join(process.cwd(), "sessions");
 
@@ -122,16 +122,30 @@ function getEntry(id) {
  * sends for local play), persists it, and returns the session's public
  * record (never the password itself - only whether one is set).
  */
-export function createSession({ name, mapId, mapData, maxLevel, startingGold, unitCapacity, password }) {
+/** Clamped to [2,4] - matches the shared package's own team-slot bound (see
+ * turn.js's isTeamAlive: `team >= 0 && team < 4`) and the original's own
+ * PLAYER_TYPE/team model, which never supported more than 4 sides. */
+const MIN_PLAYERS = 2;
+const MAX_PLAYERS = 4;
+
+export function createSession({ name, mapId, mapData, maxLevel, startingGold, unitCapacity, password, maxPlayers }) {
   const id = generateSessionId();
+  const playerCount = Math.min(MAX_PLAYERS, Math.max(MIN_PLAYERS, maxPlayers ?? 2));
   const gameState = new GameState({
     mapData,
     unitDefs: units,
     tileDefs: tiles,
-    players: [
-      { team: 0, type: 1, alliance: 0, gold: startingGold },
-      { team: 1, type: 1, alliance: 1, gold: startingGold },
-    ],
+    // One player per team, own alliance each - matches the existing 2-player
+    // convention (alliance === team) exactly, just generalized to however
+    // many teams this session actually has. See BoardScene.js's own comment
+    // on why the game-over screen currently treats alliance and team as
+    // interchangeable - this constructor is exactly why that holds.
+    players: Array.from({ length: playerCount }, (_, team) => ({
+      team,
+      type: 1,
+      alliance: team,
+      gold: startingGold,
+    })),
     rule: { maxLevel, unitCapacity },
   });
 
@@ -139,6 +153,7 @@ export function createSession({ name, mapId, mapData, maxLevel, startingGold, un
     id,
     name: name || id,
     mapId,
+    maxPlayers: playerCount,
     passwordHash: password ? hashPassword(password) : null,
     createdAt: Date.now(),
   };
@@ -173,7 +188,10 @@ function toPublicSession(entry) {
     mapId: entry.meta.mapId,
     hasPassword: !!entry.meta.passwordHash,
     connectedPlayerCount: entry.connectedTeams.size,
-    maxPlayers: 2,
+    // Defensive default for a session file written before this field
+    // existed (session files are transient - deleted on victory/all-leave -
+    // so this is a low-risk edge case, but a safety net costs nothing).
+    maxPlayers: entry.meta.maxPlayers ?? 2,
     gameOver: entry.gameState.gameOver,
   };
 }
@@ -191,7 +209,8 @@ export function joinSession(id, password) {
   if (entry.meta.passwordHash && hashPassword(password ?? "") !== entry.meta.passwordHash) {
     return { ok: false, reason: "wrong_password" };
   }
-  const openTeam = [0, 1].find((t) => !entry.connectedTeams.has(t));
+  const maxPlayers = entry.meta.maxPlayers ?? 2;
+  const openTeam = Array.from({ length: maxPlayers }, (_, t) => t).find((t) => !entry.connectedTeams.has(t));
   if (openTeam === undefined) return { ok: false, reason: "full" };
 
   entry.connectedTeams.add(openTeam);
@@ -226,13 +245,20 @@ export function applySessionAction(id, mutator) {
   const entry = live.get(id);
   if (!entry) return { ok: false, reason: "not_found" };
   const result = mutator(entry.gameState);
+  // Computed BEFORE the session/gameState gets torn down below - the
+  // broadcast's own gameState snapshot is null for a game-ending action
+  // (see getSerializedGameState's docstring), so this is the only chance
+  // to tell the client who actually won; by the time a client would try
+  // getWinnerAlliance(scene.game_) itself, that instance never received
+  // the final update and would still show both teams alive.
+  const winnerAlliance = entry.gameState.gameOver ? getWinnerAlliance(entry.gameState) : -1;
   if (entry.gameState.gameOver) {
     deleteSessionFile(id);
     live.delete(id);
   } else {
     writeSessionFile(entry);
   }
-  return { ok: true, result, gameOver: entry.gameState.gameOver };
+  return { ok: true, result, gameOver: entry.gameState.gameOver, winnerAlliance };
 }
 
 export function getLiveGameState(id) {

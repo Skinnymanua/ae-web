@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { TEAM_COLOR } from "../constants.js";
 
 /**
  * Holding screen after creating or joining a networked session - shows who's
@@ -32,7 +33,14 @@ export class NetworkLobbyScene extends Phaser.Scene {
       .text(width / 2, 75, `Map: ${this.session.mapId}`, { fontSize: "14px", color: "#cccccc" })
       .setOrigin(0.5);
     this.add
-      .text(width / 2, 100, `You are Team ${this.team}`, { fontSize: "16px", color: this.team === 0 ? "#4488ff" : "#ff8844" })
+      .text(width / 2, 100, `You are Team ${this.team}`, {
+        fontSize: "16px",
+        // Same 4-color palette the bottom bar uses (see constants.js's
+        // TEAM_COLOR) instead of a hardcoded blue/orange binary choice -
+        // that only ever distinguished team 0 from "everything else",
+        // which stopped making sense once there could be teams 2 and 3 too.
+        color: `#${TEAM_COLOR[this.team].toString(16).padStart(6, "0")}`,
+      })
       .setOrigin(0.5);
 
     this.statusText = this.add.text(width / 2, height * 0.45, "", { fontSize: "16px", color: "#44dd88" }).setOrigin(0.5);
@@ -77,14 +85,18 @@ export class NetworkLobbyScene extends Phaser.Scene {
 
   updateStatus(playerCount) {
     this.statusPlayerCount = playerCount;
+    const maxPlayers = this.session.maxPlayers;
     this.statusText.setText(
-      playerCount >= 2 ? "Both players connected - ready to start." : "Waiting for an opponent to join..."
+      playerCount >= maxPlayers
+        ? "All players connected - ready to start."
+        : `Waiting for players... (${playerCount} of ${maxPlayers} connected)`
     );
-    // Disabled (not just discouraged) below 2 players - starting a
-    // "networked" game against no one doesn't mean anything, matching the
-    // same disabled-until-valid pattern SkirmishSetupScene's own Start
-    // button uses for "no map selected yet".
-    if (playerCount >= 2) {
+    // Disabled (not just discouraged) until every slot is filled - starting
+    // early would leave an unconnected team's turn permanently stuck (no
+    // socket registered for it, so nothing could ever act on its behalf) -
+    // matching the same disabled-until-valid pattern SkirmishSetupScene's
+    // own Start button uses for "no map selected yet".
+    if (playerCount >= maxPlayers) {
       this.startButton.setColor("#44dd88");
       this.startButton.setInteractive();
     } else {

@@ -4,9 +4,11 @@ import {
   MAX_LEVEL_OPTIONS,
   STARTING_GOLD_OPTIONS,
   UNIT_CAPACITY_OPTIONS,
+  PLAYER_COUNT_OPTIONS,
   DEFAULT_MAX_LEVEL,
   DEFAULT_STARTING_GOLD,
   DEFAULT_UNIT_CAPACITY,
+  DEFAULT_PLAYER_COUNT,
 } from "./skirmishSettings.js";
 
 /**
@@ -32,6 +34,7 @@ export class SkirmishSetupScene extends Phaser.Scene {
     this.maxLevelIndex = data?.maxLevelIndex ?? MAX_LEVEL_OPTIONS.indexOf(DEFAULT_MAX_LEVEL);
     this.startingGoldIndex = data?.startingGoldIndex ?? STARTING_GOLD_OPTIONS.indexOf(DEFAULT_STARTING_GOLD);
     this.unitCapacityIndex = data?.unitCapacityIndex ?? UNIT_CAPACITY_OPTIONS.indexOf(DEFAULT_UNIT_CAPACITY);
+    this.playerCountIndex = data?.playerCountIndex ?? PLAYER_COUNT_OPTIONS.indexOf(DEFAULT_PLAYER_COUNT);
   }
 
   create() {
@@ -104,7 +107,7 @@ export class SkirmishSetupScene extends Phaser.Scene {
     this.updateSettingsSummary();
 
     const settingsButton = this.add
-      .text(startX, startY + 90, "[ Settings ]", { fontSize: "16px", color: "#44aaff" })
+      .text(startX, startY + 115, "[ Settings ]", { fontSize: "16px", color: "#44aaff" })
       .setInteractive();
     settingsButton.on("pointerup", (pointer, localX, localY, event) => {
       event.stopPropagation();
@@ -117,6 +120,7 @@ export class SkirmishSetupScene extends Phaser.Scene {
       `Max Level: ${MAX_LEVEL_OPTIONS[this.maxLevelIndex]}`,
       `Starting Gold: ${STARTING_GOLD_OPTIONS[this.startingGoldIndex]}`,
       `Max Units: ${UNIT_CAPACITY_OPTIONS[this.unitCapacityIndex]}`,
+      `Players: ${PLAYER_COUNT_OPTIONS[this.playerCountIndex]}`,
     ];
     this.settingsSummaryText.setText(lines.join("\n"));
   }
@@ -127,6 +131,7 @@ export class SkirmishSetupScene extends Phaser.Scene {
       maxLevelIndex: this.maxLevelIndex,
       startingGoldIndex: this.startingGoldIndex,
       unitCapacityIndex: this.unitCapacityIndex,
+      playerCountIndex: this.playerCountIndex,
     });
   }
 
@@ -174,6 +179,7 @@ export class SkirmishSetupScene extends Phaser.Scene {
       maxLevel: MAX_LEVEL_OPTIONS[this.maxLevelIndex],
       startingGold: STARTING_GOLD_OPTIONS[this.startingGoldIndex],
       unitCapacity: UNIT_CAPACITY_OPTIONS[this.unitCapacityIndex],
+      playerCount: PLAYER_COUNT_OPTIONS[this.playerCountIndex],
     });
   }
 }
