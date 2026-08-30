@@ -510,6 +510,17 @@ async function handleBuyPlacementClick(scene, x, y) {
 }
 
 function handleUnitSelectionClick(scene, x, y) {
+  // Local skirmish is hot-seat - both teams share one screen/keyboard, so
+  // "whose turn is it" already fully gates who CAN act (there's no separate
+  // notion of "which browser is looking at this"). Networked mode adds that
+  // second dimension: scene.game_.currentTeam being team 0's turn does NOT
+  // mean THIS client should be able to act - only when it's also this
+  // client's own team. Without this, a spectating opponent could select
+  // the acting player's own units and walk through to a real action bar
+  // (whose buttons the server would then correctly reject anyway, but
+  // shouldn't have been reachable in the first place).
+  const isMyTurn = !scene.net_ || scene.net_.team === scene.game_.currentTeam;
+
   const clickedUnit = scene.game_.getUnitAt(x, y);
   if (!clickedUnit) {
     // Clicked empty ground with nothing in movement-selection mode — this is how
@@ -525,13 +536,13 @@ function handleUnitSelectionClick(scene, x, y) {
     // (see ui/actionBar.js's canBuyHere), any other unit gets no purchase
     // option at all.
     const tile = scene.game_.getTileAt(x, y);
-    if (tile?.castle && tile.team === scene.game_.currentTeam) {
+    if (isMyTurn && tile?.castle && tile.team === scene.game_.currentTeam) {
       showBuyMenu(scene, x, y);
     }
     return;
   }
 
-  const canAct = clickedUnit.team === scene.game_.currentTeam && !clickedUnit.standby;
+  const canAct = isMyTurn && clickedUnit.team === scene.game_.currentTeam && !clickedUnit.standby;
 
   if (!canAct) {
     // Enemy unit, or one of ours that's already acted this turn — show its

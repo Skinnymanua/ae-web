@@ -80,11 +80,12 @@ export function runGameAction(scene, actionType, ...args) {
  *
  * If a runGameAction call from THIS client is pending, resolves it with the
  * broadcast's result (the ordinary case: I acted, this confirms it). If
- * nothing is pending, this was the opponent's turn - falls back to a full
- * re-render (onOpponentAction callback) rather than trying to replay the
- * same spark/shake/damage-number animation runGameAction's own callers get,
- * which would need a per-action-type animation replayer this doesn't build
- * yet (flagged as a follow-up, not attempted here).
+ * nothing is pending, this was the opponent's turn - onOpponentAction is
+ * called with (msg, previousGameState): the PRE-action GameState instance,
+ * still holding the pre-update positions of anyone the action just moved or
+ * killed - see net/replayOpponentAction.js, which needs exactly that to
+ * place a fatal hit's spark/shake at the right tile once the victim's
+ * already gone from the fresh snapshot.
  *
  * scene.onGameOver, if set, is called whenever a broadcast reports the game
  * ending - regardless of which client's action caused it, since
@@ -93,26 +94,24 @@ export function runGameAction(scene, actionType, ...args) {
  * see msg.gameOver at all.
  */
 export function setupNetworkedGameSync(scene, unitDefs, tileDefs, onOpponentAction) {
-  const applySnapshot = (plain) => {
+  scene.net_.unsubscribeGameUpdate = scene.net_.socket.on("game_update", (msg) => {
+    const previousGameState = scene.game_;
     // A game-ending action's broadcast can carry gameState: null - see
     // sessions.js's applySessionAction, which deletes the session (the
     // "removed on victory/defeat" rule) BEFORE index.js builds this
     // broadcast, so getSerializedGameState(sessionId) correctly finds
     // nothing left to serialize. Nothing to sync in that case; msg.gameOver
     // (checked unconditionally below) is what actually matters then.
-    if (!plain) return;
-    scene.game_ = deserializeGameState(plain, unitDefs, tileDefs);
-  };
-
-  scene.net_.unsubscribeGameUpdate = scene.net_.socket.on("game_update", (msg) => {
-    applySnapshot(msg.gameState);
+    if (msg.gameState) {
+      scene.game_ = deserializeGameState(msg.gameState, unitDefs, tileDefs);
+    }
     if (scene.net_.pendingResolve) {
       const resolve = scene.net_.pendingResolve;
       scene.net_.pendingResolve = null;
       scene.net_.pendingReject = null;
       resolve(msg.result);
     } else {
-      onOpponentAction?.(msg);
+      onOpponentAction?.(msg, previousGameState);
     }
     // Checked unconditionally, not just in the onOpponentAction branch -
     // the player whose OWN action ended the game needs the game-over notice

@@ -25,7 +25,7 @@
  *   { type: "player_joined", team }              // broadcast to whoever's already there
  *   { type: "player_disconnected", team }        // broadcast on a socket closing
  *   { type: "game_started" }                     // broadcast to both, in response to either one's start_game
- *   { type: "game_update", actionType, result, gameOver, gameState }  // broadcast after any action - gameState is a fresh full snapshot, always apply that, never recompute locally (RNG)
+ *   { type: "game_update", actionType, params, result, gameOver, gameState }  // broadcast after any action - gameState is a fresh full snapshot, always apply that, never recompute locally (RNG); params is the original request (e.g. moveUnit's path), needed by the RECEIVING client to know what to animate, since a bare boolean/void result alone often isn't enough
  *   { type: "action_error", reason }             // unknown_action | not_your_turn | not_your_unit
  *   { type: "error", message }                   // malformed/unhandled message
  */
@@ -151,6 +151,7 @@ function handleMessage(socket, message) {
       broadcast(sessionId, {
         type: "game_update",
         actionType: message.actionType,
+        params: message.params,
         result: outcome.result.result,
         gameOver: outcome.gameOver,
         // A fresh full snapshot, not just the bare result - see

@@ -7,11 +7,12 @@ import { TILE_SIZE, BOARD_OFFSET_Y } from "../constants.js";
 import { BOTTOM_BAR_HEIGHT } from "../ui/bottomBar.js";
 import { deserializeGameState } from "../net/deserializeGameState.js";
 import { setupNetworkedGameSync } from "../net/runGameAction.js";
+import { replayOpponentAction } from "../net/replayOpponentAction.js";
 
 import { drawTileGrid, updateSelectedTileHighlight, refreshTombs } from "../render/tiles.js";
 import { refreshUnits, animateUnits } from "../render/units.js";
-import { createHud, updateInfoText } from "../ui/hud.js";
-import { createStatsPanel, refreshStatsPanel } from "../ui/statsPanel.js";
+import { createHud } from "../ui/hud.js";
+import { createStatsPanel } from "../ui/statsPanel.js";
 import { onTileClick } from "../input/boardInput.js";
 import { setupCameraDrag } from "../input/cameraDrag.js";
 
@@ -25,12 +26,11 @@ export class BoardScene extends Phaser.Scene {
    * Two shapes:
    *   - local skirmish (see SkirmishSetupScene#startGame): mapData + the
    *     three configurable settings, builds a fresh local GameState.
-   *   - networked (see NetworkLobbyScene - not built yet as of this
-   *     comment, but this is the receiving end already in place for it):
-   *     { networked: true, socket, session, team, gameState } - gameState
-   *     is a server snapshot to deserialize rather than a mapData to build
-   *     fresh from, and every mutating action routes over `socket` instead
-   *     of calling scene.game_ directly (see net/runGameAction.js).
+   *   - networked (see NetworkLobbyScene#startGame): { networked: true,
+   *     socket, session, team, gameState } - gameState is a server snapshot
+   *     to deserialize rather than a mapData to build fresh from, and every
+   *     mutating action routes over `socket` instead of calling scene.game_
+   *     directly (see net/runGameAction.js).
    * Falls back to the first auto-discovered map and the original's own
    * defaults if launched directly with no data (e.g. during dev iteration
    * on this scene alone), so local mode never hard-crashes for missing input.
@@ -203,7 +203,9 @@ export class BoardScene extends Phaser.Scene {
       // directly; see input/boardInput.js/ui/actionBar.js/ui/bottomBar.js
       // for those call sites, all `await runGameAction(scene, ...)` now.
       this.game_ = deserializeGameState(this.initialSnapshot_, unitsData.units, tilesData.tiles);
-      setupNetworkedGameSync(this, unitsData.units, tilesData.tiles, (msg) => this.onOpponentAction(msg));
+      setupNetworkedGameSync(this, unitsData.units, tilesData.tiles, (msg, previousGameState) =>
+        this.onOpponentAction(msg, previousGameState)
+      );
       this.onGameOver = () => this.showNetworkedGameOver();
     } else {
       this.game_ = new GameState({
@@ -266,21 +268,12 @@ export class BoardScene extends Phaser.Scene {
    * (not something this client itself sent - see setupNetworkedGameSync's
    * own docstring on that distinction). scene.game_ has already been
    * replaced with the fresh authoritative snapshot by the time this runs;
-   * this just re-renders everything from it.
-   *
-   * Deliberately a full re-render, not the same spark/shake/damage-number
-   * animation the LOCAL confirmPendingAttack/confirmPendingHeal/etc paths
-   * get (see boardInput.js) - replaying that for an arbitrary opponent
-   * action would need a per-action-type animation replayer keyed off
-   * msg.actionType/msg.result that doesn't exist yet. Flagged as a
-   * follow-up, not attempted here; the opponent's move is still reflected
-   * correctly and promptly, just without the extra visual flourish.
+   * `previousGameState` is what it was immediately before that, still
+   * holding pre-action positions for anyone this action just killed - see
+   * net/replayOpponentAction.js, which does the actual animation work.
    */
-  onOpponentAction(msg) {
-    refreshUnits(this);
-    refreshTombs(this);
-    refreshStatsPanel(this);
-    updateInfoText(this);
+  onOpponentAction(msg, previousGameState) {
+    replayOpponentAction(this, msg, previousGameState);
   }
 
   /** Bare-minimum "the game just ended" notice for networked play - the
