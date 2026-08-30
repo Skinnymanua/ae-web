@@ -3,6 +3,8 @@ import { GameState } from "@ae/shared/src/game-state.js";
 import unitsData from "@ae/shared/data/units.json";
 import tilesData from "@ae/shared/data/tiles.json";
 import { MAPS } from "../maps/index.js";
+import { TILE_SIZE, BOARD_OFFSET_Y } from "../constants.js";
+import { BOTTOM_BAR_HEIGHT } from "../ui/bottomBar.js";
 
 import { drawTileGrid, updateSelectedTileHighlight, refreshTombs } from "../render/tiles.js";
 import { refreshUnits, animateUnits } from "../render/units.js";
@@ -156,6 +158,24 @@ export class BoardScene extends Phaser.Scene {
   }
 
   create() {
+    // Ported from this project's old "canvas sized to the board" approach
+    // (see main.js's history) — but applied dynamically per-map now that
+    // map choice happens at runtime, not at boot. Without this, every map
+    // just renders inside whatever fixed size main.js's Phaser.Game started
+    // with, leaving a large dead zone for any map smaller than that (e.g.
+    // sample-map.json at 480x480 inside an 800x600 canvas) or forcing scroll
+    // for any map bigger. Capped so an unusually large map still scrolls via
+    // input/cameraDrag.js instead of producing an oversized browser window.
+    const MAX_VIEWPORT_WIDTH = 1000;
+    const MAX_VIEWPORT_HEIGHT = 700;
+    const targetWidth = Math.min(this.mapData_.width * TILE_SIZE, MAX_VIEWPORT_WIDTH);
+    const targetHeight = Math.min(
+      BOARD_OFFSET_Y + this.mapData_.height * TILE_SIZE + BOTTOM_BAR_HEIGHT,
+      MAX_VIEWPORT_HEIGHT
+    );
+    this.scale.resize(targetWidth, targetHeight);
+    this.cameras.main.setSize(targetWidth, targetHeight);
+
     this.game_ = new GameState({
       mapData: this.mapData_,
       unitDefs: unitsData.units,

@@ -3,14 +3,18 @@
  * side (left stat pair-column, center unit portrait, right stat pair-column), each
  * stat row a colored circular icon badge next to a pill-shaped value background.
  * Layout is bespoke (the original used a text-only side panel — see
- * RightPanelRenderer), but the SIX stats shown are exactly RightPanelRenderer's
- * own six (level/attack/pdef/mdef/hp/xp) - built from the original's icon assets,
- * where it has one (XP has none in the source either - see addStatRow's iconFrame
- * null case).
+ * RightPanelRenderer), but the SIX stats shown are exactly the reference
+ * screenshot's own six: HP/Attack/Defence (left), XP/Magic defence/Move (right).
  *
  * Left column top-to-bottom: HP / Attack / Defence.
- * Right column top-to-bottom: Level / Magic defence / XP (current/needed for next
- * level, or "-/-" at max level - matches RightPanelRenderer's own display exactly).
+ * Right column top-to-bottom: XP (current/needed for next level, or "-/-" at max
+ * level - see combat-resolution.js's getCurrentExperience/getLevelUpExperience)
+ * / Magic defence / Move (max tiles per move).
+ *
+ * XP's icon reuses HUD_ICON.LEVEL (icons_hud_battle.png frame 3, an upward
+ * chevron) flipped vertically - confirmed against the reference screenshot,
+ * which shows the same chevron shape and color pointing DOWN for this exact
+ * row; there's no separate XP icon asset in the source repo to draw from.
  */
 import { HUD_ICON, STAT_ICON, BOARD_OFFSET_Y, DEPTH, PHYSICAL_ATTACK_COLOR, MAGIC_ATTACK_COLOR } from "../constants.js";
 import { getUnitSpriteKey } from "../render/unitTexture.js";
@@ -26,39 +30,43 @@ import {
 const BAR_HEIGHT = BOARD_OFFSET_Y;
 const ROW_HEIGHT = 24;
 const PORTRAIT_SIZE = 64;
-const BADGE_RADIUS = 10;
-const ICON_SIZE = 14;
+// Modestly bigger than before (was 10/14/20) to read closer to the reference
+// screenshot's much larger badges - bounded by ROW_HEIGHT/BAR_HEIGHT though,
+// which this port keeps compact (76px total for all 3 rows) rather than the
+// screenshot's much taller phone-scaled bar; a full match would need
+// restructuring BAR_HEIGHT itself; not done here.
+const BADGE_RADIUS = 11;
+const ICON_SIZE = 17;
 const PILL_WIDTH = 74;
-const PILL_HEIGHT = 20;
+const PILL_HEIGHT = 22;
 
 const CELL_BG = 0x232838;
 const PILL_BG = 0x3a4258;
-const BADGE_COLORS = { hp: 0xe0a83a, attack: 0x2b2b2b, pdef: 0xc0348a, level: 0xe8e4d8, mdef: 0xe0842a, xp: 0x2ec4d6 };
+// Sampled from the reference screenshot: every badge is the SAME black
+// circle with a steel-teal ring border, whatever stat it is - the icon art
+// itself (not the badge) carries the per-stat color (yellow heart, magenta
+// shield, etc.). Replaces an earlier per-stat BADGE_COLORS fill, which was
+// a guess made before an actual screenshot was available to check against.
+const BADGE_FILL = 0x0a0a0a;
+const BADGE_RING = 0x5b93ab;
 
 
-function addStatRow(scene, container, graphics, x, y, key, iconSheet, iconFrame, align) {
+function addStatRow(scene, container, graphics, x, y, iconSheet, iconFrame, align, flipY = false) {
   const badgeX = align === "left" ? x + BADGE_RADIUS : x - BADGE_RADIUS;
   const badgeY = y + PILL_HEIGHT / 2;
-  graphics.fillStyle(BADGE_COLORS[key], 1);
+  graphics.fillStyle(BADGE_FILL, 1);
   graphics.fillCircle(badgeX, badgeY, BADGE_RADIUS);
+  graphics.lineStyle(2, BADGE_RING, 1);
+  graphics.strokeCircle(badgeX, badgeY, BADGE_RADIUS);
 
   const pillX = align === "left" ? x + BADGE_RADIUS : x - BADGE_RADIUS - PILL_WIDTH;
   graphics.fillStyle(PILL_BG, 1);
   graphics.fillRoundedRect(pillX, y, PILL_WIDTH, PILL_HEIGHT, 6);
 
-  if (iconFrame != null) {
-    const icon = scene.add.image(badgeX, badgeY, iconSheet, iconFrame);
-    icon.setDisplaySize(ICON_SIZE, ICON_SIZE);
-    container.add(icon);
-  } else {
-    // XP has no icon in the original either - RightPanelRenderer draws a
-    // plain "XP " text prefix, not an icon like level/attack/pdef/mdef do -
-    // keep the badge circle for visual consistency with this bar's other
-    // rows, but label it with text instead of an image.
-    const label = scene.add.text(badgeX, badgeY, "XP", { fontSize: "8px", color: "#000000", fontStyle: "bold" });
-    label.setOrigin(0.5, 0.5);
-    container.add(label);
-  }
+  const icon = scene.add.image(badgeX, badgeY, iconSheet, iconFrame);
+  icon.setDisplaySize(ICON_SIZE, ICON_SIZE);
+  icon.setFlipY(flipY);
+  container.add(icon);
 
   const text = scene.add.text(pillX + PILL_WIDTH - 8, y + PILL_HEIGHT / 2, "-", {
     fontSize: "13px",
@@ -101,14 +109,14 @@ export function createStatsPanel(scene) {
   let rowY = 6;
 
   const texts = {};
-  texts.hp = addStatRow(scene, container, g, leftX, rowY, "hp", "icons_action", STAT_ICON.HP, "left");
-  texts.level = addStatRow(scene, container, g, rightX, rowY, "level", "icons_hud_battle", HUD_ICON.LEVEL, "right");
+  texts.hp = addStatRow(scene, container, g, leftX, rowY, "icons_action", STAT_ICON.HP, "left");
+  texts.xp = addStatRow(scene, container, g, rightX, rowY, "icons_hud_battle", HUD_ICON.LEVEL, "right", true);
   rowY += ROW_HEIGHT;
-  texts.attack = addStatRow(scene, container, g, leftX, rowY, "attack", "icons_hud_battle", HUD_ICON.ATTACK, "left");
-  texts.mdef = addStatRow(scene, container, g, rightX, rowY, "mdef", "icons_hud_battle", HUD_ICON.MDEF, "right");
+  texts.attack = addStatRow(scene, container, g, leftX, rowY, "icons_hud_battle", HUD_ICON.ATTACK, "left");
+  texts.mdef = addStatRow(scene, container, g, rightX, rowY, "icons_action", STAT_ICON.MDEF, "right");
   rowY += ROW_HEIGHT;
-  texts.pdef = addStatRow(scene, container, g, leftX, rowY, "pdef", "icons_hud_battle", HUD_ICON.PDEF, "left");
-  texts.xp = addStatRow(scene, container, g, rightX, rowY, "xp", null, null, "right");
+  texts.pdef = addStatRow(scene, container, g, leftX, rowY, "icons_hud_battle", HUD_ICON.PDEF, "left");
+  texts.move = addStatRow(scene, container, g, rightX, rowY, "icons_action", STAT_ICON.MOVE, "right");
 
   container.setVisible(false);
   container.setScrollFactor(0);
@@ -156,16 +164,17 @@ export function updateStatsPanel(scene, unit) {
   panel.texts.attack.setColor(attackColor);
 
   panel.texts.pdef.setText(String(getEffectivePhysicalDefence(unit)));
-  panel.texts.level.setText(String(unit.level));
   panel.texts.mdef.setText(String(getEffectiveMagicDefence(unit)));
+  panel.texts.move.setText(String(unit.maxMovementPoint));
 
   // Ported from RightPanelRenderer's XP display exactly: "current/needed" for
   // the next level, or "-/-" once maxLevel is reached (getLevelUpExperience's
-  // -1 sentinel) - cyan, matching the original's Color.CYAN for this stat.
+  // -1 sentinel) - white, matching the reference screenshot (not the
+  // original desktop source's Color.CYAN - the screenshot is this port's
+  // actual visual target here).
   const maxLevel = scene.game_.rule.maxLevel;
   const neededXp = getLevelUpExperience(unit, maxLevel);
   panel.texts.xp.setText(neededXp > 0 ? `${getCurrentExperience(unit, maxLevel)}/${neededXp}` : "-/-");
-  panel.texts.xp.setColor("#00ffff");
 }
 
 /** Re-renders the panel for whichever unit it's currently showing — call after

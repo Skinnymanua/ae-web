@@ -26,6 +26,11 @@ export const BOTTOM_BAR_HEIGHT = 44;
 const BAR_HEIGHT = BOTTOM_BAR_HEIGHT;
 const PREVIEW_SIZE = 36;
 const END_TURN_ZONE_WIDTH = 100;
+// Matches render/units.js's SCHAR_WIDTH/HEIGHT (TILE_SIZE-relative, same
+// chars_small.png digit glyphs) - not exported from there, so duplicated
+// here rather than importing across an unrelated module boundary.
+const SCHAR_WIDTH = 12;
+const SCHAR_HEIGHT = 14;
 
 export function createBottomBar(scene) {
   // Fixed to the camera's actual viewport width, not the map's - see
@@ -92,15 +97,21 @@ export function createBottomBar(scene) {
   // Ported from FontRenderer#drawTileDefenceBonus - a small shield glyph
   // (chars_small.png frame 11, already loaded for the HP-digit readout under
   // units - see render/units.js) plus the defence number, overlaid on the
-  // tile square itself rather than shown as separate text elsewhere.
-  const defenceIcon = scene.add.sprite(previewX + 2, previewY + PREVIEW_SIZE - 11, "chars_small", 11);
+  // tile square itself rather than shown as separate text elsewhere. The
+  // number itself uses the SAME chars_small digit glyphs as that HP readout
+  // (drawTileDefenceBonus calls the same drawSNumber FontRenderer uses
+  // there) rather than a Phaser Text object - a plain Text has no outline,
+  // so it read as a naked white blob against the tile art; the glyph
+  // sprites have the black outline baked into the pixel art itself.
+  const defenceIconX = previewX + 2;
+  const defenceIconY = previewY + PREVIEW_SIZE - SCHAR_HEIGHT - 2;
+  const defenceIcon = scene.add.sprite(defenceIconX, defenceIconY, "chars_small", 11);
   defenceIcon.setOrigin(0, 0);
-  defenceIcon.setDisplaySize(9, 10);
+  defenceIcon.setDisplaySize(SCHAR_WIDTH, SCHAR_HEIGHT);
   container.add(defenceIcon);
-  const defenceText = scene.add
-    .text(previewX + 11, previewY + PREVIEW_SIZE - 12, "-", { fontSize: "11px", color: "#ffffff", fontStyle: "bold" })
-    .setOrigin(0, 0);
-  container.add(defenceText);
+  // Digit sprites are rebuilt on every updateBottomBarTile call (see below) -
+  // start with none, matching the HP readout's own "no sprites yet" state.
+  let defenceDigitSprites = [];
 
   const terrainText = scene.add.text(previewX + PREVIEW_SIZE + 8, 6, "-", { fontSize: "13px", color: "#ffffff" });
   container.add(terrainText);
@@ -146,7 +157,19 @@ export function createBottomBar(scene) {
     .setOrigin(0, 0.5);
   container.add(turnText);
 
-  scene.bottomBar = { container, bg, previewSprite, defenceText, terrainText, terrainSubText, popText, goldText, turnText };
+  scene.bottomBar = {
+    container,
+    bg,
+    previewSprite,
+    defenceIconX,
+    defenceIconY,
+    defenceDigitSprites,
+    terrainText,
+    terrainSubText,
+    popText,
+    goldText,
+    turnText,
+  };
 
   updateBottomBarEconomy(scene);
 }
@@ -158,7 +181,24 @@ export function updateBottomBarTile(scene, x, y) {
   const bar = scene.bottomBar;
   const tile = scene.game_.getTileAt(x, y);
   bar.previewSprite.setTexture(`tile_${tile.index}`);
-  bar.defenceText.setText(String(tile.defenceBonus));
+
+  // Rebuilt each time, matching render/units.js's HP digit sprites - a
+  // variable-length number needs a fresh set of glyph sprites, not just a
+  // text update, since each digit is its own sprite (see the icon comment
+  // above in createBottomBar for why these use chars_small glyphs at all).
+  for (const sprite of bar.defenceDigitSprites) sprite.destroy();
+  const digitX = bar.defenceIconX + SCHAR_WIDTH;
+  bar.defenceDigitSprites = String(tile.defenceBonus)
+    .split("")
+    .map(Number)
+    .map((n, i) => {
+      const sprite = scene.add.sprite(digitX + i * SCHAR_WIDTH, bar.defenceIconY, "chars_small", n);
+      sprite.setOrigin(0, 0);
+      sprite.setDisplaySize(SCHAR_WIDTH, SCHAR_HEIGHT);
+      bar.container.add(sprite);
+      return sprite;
+    });
+
   bar.terrainText.setText(tile.typeName ?? "-");
   bar.terrainSubText.setText(`Move ${tile.stepCost}`);
 }

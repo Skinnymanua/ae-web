@@ -1,32 +1,37 @@
 import Phaser from "phaser";
 import { MAPS } from "../maps/index.js";
-
-// Bounded option sets, not freeform typed input - Phaser has no native text
-// field, and every one of these settings has a natural small set of sensible
-// values. UNIT_CAPACITY_OPTIONS in particular MUST stay the original's own
-// Rule.POPULATION_PRESET entries (see entity/Rule.java) - a stepper through
-// those exact presets matches the source's own design, not just a UI
-// shortcut. MAX_LEVEL_OPTIONS/STARTING_GOLD_OPTIONS have no source
-// equivalent (the original hardcodes level cap at 3 and starting gold
-// per-map) - these ranges are this port's own reasonable bounds.
-const MAX_LEVEL_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-const STARTING_GOLD_OPTIONS = [0, 100, 200, 300, 500, 750, 1000, 1500, 2000];
-const UNIT_CAPACITY_OPTIONS = [15, 20, 25, 30, 35, 40]; // Rule.POPULATION_PRESET
-
-const DEFAULT_MAX_LEVEL = 3; // Rule.getDefaultRule()'s implicit cap - see combat-resolution.js's levelExperienceTable
-const DEFAULT_STARTING_GOLD = 300; // matches every hardcoded player.gold this port has used so far
-const DEFAULT_UNIT_CAPACITY = 15; // Rule.getDefaultRule()'s UNIT_CAPACITY - POPULATION_PRESET[0]
+import {
+  MAX_LEVEL_OPTIONS,
+  STARTING_GOLD_OPTIONS,
+  UNIT_CAPACITY_OPTIONS,
+  DEFAULT_MAX_LEVEL,
+  DEFAULT_STARTING_GOLD,
+  DEFAULT_UNIT_CAPACITY,
+} from "./skirmishSettings.js";
 
 /**
  * Skirmish (local PvP) game creation: pick a map (auto-discovered from
  * maps/index.js - every .json file dropped in that folder shows up here,
- * no registration needed) and three game settings, then hands off to
- * BoardScene via scene.start("BoardScene", {...}) - see BoardScene#init for
- * the receiving end.
+ * no registration needed), then hands off to BoardScene via
+ * scene.start("BoardScene", {...}) - see BoardScene#init for the receiving
+ * end. The three game settings (max level/gold/units) live in their own
+ * submenu now (SkirmishSettingsScene) rather than crowding this screen -
+ * see #openSettings/init below for how the current values travel there and
+ * back without resetting.
  */
 export class SkirmishSetupScene extends Phaser.Scene {
   constructor() {
     super("SkirmishSetupScene");
+  }
+
+  /** Restores whatever was passed back from SkirmishSettingsScene's "Back"
+   * button, or starts fresh with defaults on a normal first entry from
+   * MenuScene (data undefined then). */
+  init(data) {
+    this.selectedMapId = data?.selectedMapId ?? MAPS[0]?.id ?? null;
+    this.maxLevelIndex = data?.maxLevelIndex ?? MAX_LEVEL_OPTIONS.indexOf(DEFAULT_MAX_LEVEL);
+    this.startingGoldIndex = data?.startingGoldIndex ?? STARTING_GOLD_OPTIONS.indexOf(DEFAULT_STARTING_GOLD);
+    this.unitCapacityIndex = data?.unitCapacityIndex ?? UNIT_CAPACITY_OPTIONS.indexOf(DEFAULT_UNIT_CAPACITY);
   }
 
   create() {
@@ -37,14 +42,9 @@ export class SkirmishSetupScene extends Phaser.Scene {
       .text(width / 2, 24, "Skirmish Setup", { fontSize: "24px", color: "#ffdd44", fontStyle: "bold" })
       .setOrigin(0.5, 0);
 
-    this.selectedMapId = MAPS[0]?.id ?? null;
-    this.maxLevelIndex = MAX_LEVEL_OPTIONS.indexOf(DEFAULT_MAX_LEVEL);
-    this.startingGoldIndex = STARTING_GOLD_OPTIONS.indexOf(DEFAULT_STARTING_GOLD);
-    this.unitCapacityIndex = UNIT_CAPACITY_OPTIONS.indexOf(DEFAULT_UNIT_CAPACITY);
-
     this.mapRowTexts = [];
     this.buildMapList();
-    this.buildSettings();
+    this.buildSettingsSummary();
     this.buildFooter();
   }
 
@@ -89,51 +89,44 @@ export class SkirmishSetupScene extends Phaser.Scene {
     }
   }
 
-  buildSettings() {
+  /** Read-only glance at the current settings (so you don't have to open the
+   * submenu just to check them) plus the button into it. */
+  buildSettingsSummary() {
     const startX = 420;
     const startY = 90;
     this.add.text(startX, startY - 26, "Game Settings", { fontSize: "16px", color: "#cccccc" });
 
-    this.createStepperRow(startX, startY, "Max Level", MAX_LEVEL_OPTIONS, this.maxLevelIndex, (i) => {
-      this.maxLevelIndex = i;
+    this.settingsSummaryText = this.add.text(startX, startY, "", {
+      fontSize: "14px",
+      color: "#ffffff",
+      lineSpacing: 10,
     });
-    this.createStepperRow(startX, startY + 36, "Starting Gold", STARTING_GOLD_OPTIONS, this.startingGoldIndex, (i) => {
-      this.startingGoldIndex = i;
-    });
-    this.createStepperRow(startX, startY + 72, "Max Units", UNIT_CAPACITY_OPTIONS, this.unitCapacityIndex, (i) => {
-      this.unitCapacityIndex = i;
+    this.updateSettingsSummary();
+
+    const settingsButton = this.add
+      .text(startX, startY + 90, "[ Settings ]", { fontSize: "16px", color: "#44aaff" })
+      .setInteractive();
+    settingsButton.on("pointerup", (pointer, localX, localY, event) => {
+      event.stopPropagation();
+      this.openSettings();
     });
   }
 
-  /** A labeled "- value +" row stepping through `options` by index - see the
-   * module-level comment on why these are bounded option sets rather than
-   * free text entry. */
-  createStepperRow(x, y, label, options, initialIndex, onChange) {
-    this.add.text(x, y, label, { fontSize: "14px", color: "#ffffff" });
+  updateSettingsSummary() {
+    const lines = [
+      `Max Level: ${MAX_LEVEL_OPTIONS[this.maxLevelIndex]}`,
+      `Starting Gold: ${STARTING_GOLD_OPTIONS[this.startingGoldIndex]}`,
+      `Max Units: ${UNIT_CAPACITY_OPTIONS[this.unitCapacityIndex]}`,
+    ];
+    this.settingsSummaryText.setText(lines.join("\n"));
+  }
 
-    const valueX = x + 150;
-    const valueText = this.add
-      .text(valueX, y, String(options[initialIndex]), { fontSize: "14px", color: "#ffdd44" })
-      .setOrigin(0.5, 0);
-
-    let index = initialIndex;
-    const minus = this.add.text(valueX - 30, y, "-", { fontSize: "14px", color: "#dd4444" }).setInteractive();
-    const plus = this.add.text(valueX + 30, y, "+", { fontSize: "14px", color: "#44dd88" }).setInteractive();
-
-    const update = () => {
-      valueText.setText(String(options[index]));
-      onChange(index);
-    };
-
-    minus.on("pointerup", (pointer, localX, localY, event) => {
-      event.stopPropagation();
-      index = Math.max(0, index - 1);
-      update();
-    });
-    plus.on("pointerup", (pointer, localX, localY, event) => {
-      event.stopPropagation();
-      index = Math.min(options.length - 1, index + 1);
-      update();
+  openSettings() {
+    this.scene.start("SkirmishSettingsScene", {
+      selectedMapId: this.selectedMapId,
+      maxLevelIndex: this.maxLevelIndex,
+      startingGoldIndex: this.startingGoldIndex,
+      unitCapacityIndex: this.unitCapacityIndex,
     });
   }
 

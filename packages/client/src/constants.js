@@ -1,5 +1,13 @@
 export const TILE_SIZE = 48;
 
+// Fixed size for MenuScene/SkirmishSetupScene, independent of any map (see
+// BoardScene#create's dynamic resize for why the board itself doesn't use
+// this). Used by main.js at boot and by both menu scenes on re-entry, so the
+// canvas is guaranteed back to this size if the player ever navigates from
+// BoardScene back to a menu screen after that scene resized it to fit a map.
+export const MENU_WIDTH = 800;
+export const MENU_HEIGHT = 600;
+
 // Height of the top stats bar (see ui/statsPanel.js) — the board is drawn shifted
 // down by this much so the bar sits in its own space above the map, not overlapping it.
 export const BOARD_OFFSET_Y = 76;
@@ -31,13 +39,21 @@ export const STAT_ICON = { HP: 7, MOVE: 4, MDEF: 6 };
 // — just "HP "/"XP " text prefixes.
 export const HUD_ICON = { LEVEL: 3, ATTACK: 0, PDEF: 1, MDEF: 2 };
 
-// Exact colors from ResourceManager: color_physical_attack / color_magic_attack.
 // The original (UnitStoreDialog/RightPanelRenderer) has no separate "magic
 // attack" stat slot - there's one Attack label whose text color switches
 // between these two depending on the unit's attackType. Any UI showing attack
 // should follow that: one value, color-coded - not a second physical/magic
 // attack column.
-export const PHYSICAL_ATTACK_COLOR = "#e30075";
+//
+// PHYSICAL_ATTACK_COLOR is sampled directly from a real screenshot of the
+// mobile reskin (a physical-attacker unit's Attack row) - #52C67B, not the
+// desktop source's color_physical_attack (#e30075 - pink). The reskin
+// diverges from the open-source desktop version here, and the reskin is
+// this port's actual visual target.
+// MAGIC_ATTACK_COLOR is still the desktop source's color_magic_attack -
+// unverified against the reskin (no magic-attacker screenshot sampled yet),
+// kept as the best available value until one is.
+export const PHYSICAL_ATTACK_COLOR = "#52c67b";
 export const MAGIC_ATTACK_COLOR = "#0000ff";
 
 // Ported from ResourceManager's bg_team array - four SOLID colors (not image
