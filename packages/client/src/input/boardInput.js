@@ -1,6 +1,7 @@
 import { animateUnitMove, refreshUnits } from "../render/units.js";
 import { animateHpChanges } from "../render/hpChange.js";
 import { animateAttackHit, playAttackHitSequence } from "../render/attackEffect.js";
+import { runGameAction } from "../net/runGameAction.js";
 import { showActionBar, finishUnitAction, finishUnitActionOrCharge, clearActionBar } from "../ui/actionBar.js";
 import { showBuyMenu } from "../ui/dialogs.js";
 import { updateInfoText } from "../ui/hud.js";
@@ -57,12 +58,20 @@ export function selectUnitForMovement(scene, unit) {
  * non-empty before the Buy button is even clickable - a king with nowhere to
  * retreat makes every unit un-buyable at that castle, not just this click.
  */
-export function purchaseUnit(scene, unitDef, castleX, castleY, team) {
+export async function purchaseUnit(scene, unitDef, castleX, castleY, team) {
   const { movable, extendedAttack } = scene.game_.getSpawnMovablePositions(unitDef.index, castleX, castleY, team);
   const castleKey = `${castleX},${castleY}`;
 
   if (movable.has(castleKey)) {
-    const unit = scene.game_.buyUnitAt(unitDef.index, team, castleX, castleY, castleX, castleY);
+    const boughtUnit = await runGameAction(scene, "buyUnitAt", unitDef.index, team, castleX, castleY, castleX, castleY);
+    if (!boughtUnit) return;
+    // Re-fetched by id rather than trusting the returned reference directly -
+    // in networked mode that reference is a detached clone from the
+    // broadcast's serialized result, not the same object scene.game_.units
+    // actually holds after deserializing the snapshot (see
+    // net/runGameAction.js's docstring). Harmless extra lookup in local
+    // mode, where it already is the same object.
+    const unit = scene.game_.getUnit(boughtUnit.id);
     if (!unit) return;
     refreshUnits(scene);
     updateInfoText(scene);
@@ -231,16 +240,20 @@ function hpChangeFromEvent(event, positionsById) {
   return { unitId: pos.id, x: pos.x, y: pos.y, change: event.change };
 }
 
-function confirmPendingAttack(scene, attacker, target) {
+async function confirmPendingAttack(scene, attacker, target) {
   const positionsById = {
     [attacker.id]: { id: attacker.id, x: attacker.x, y: attacker.y },
     [target.id]: { id: target.id, x: target.x, y: target.y },
   };
-  const result = scene.game_.attack(attacker.id, target.id);
+  // Cleared/set BEFORE the await, not after - during a networked round-trip
+  // a re-entrant click would otherwise still see attackTargetMode as true
+  // and could send a SECOND attack before the first one's even confirmed.
   scene.attackTargetMode = false;
   scene.pendingAttackTarget = null;
+  scene.animating = true;
   clearHighlights(scene);
   clearSelectedTileHighlight(scene);
+  const result = await runGameAction(scene, "attack", attacker.id, target.id);
 
   // Played BEFORE finishUnitAction's refreshUnits() - see attackEffect.js's
   // own docstring on why: a unit destroyed by this exchange needs to still
@@ -274,13 +287,14 @@ function previewDestroyTileTarget(scene, x, y) {
  * though - matches the original's own submitUnitAttackAnimation(attacker,
  * target_x, target_y) overload for this exact case: no target unit to
  * jitter, no damage number, just the spark burst. */
-function confirmPendingDestroyTile(scene, attacker, x, y) {
-  scene.game_.destroyTile(attacker.id, x, y);
+async function confirmPendingDestroyTile(scene, attacker, x, y) {
   scene.attackTargetMode = false;
   scene.pendingAttackTarget = null;
   scene.pendingDestroyTarget = null;
+  scene.animating = true;
   clearHighlights(scene);
   clearSelectedTileHighlight(scene);
+  await runGameAction(scene, "destroyTile", attacker.id, x, y);
   refreshTileTexture(scene, x, y);
   animateAttackHit(scene, null, x, y, null, () => finishUnitActionOrCharge(scene, attacker));
 }
@@ -319,16 +333,17 @@ function previewHealTarget(scene, target) {
   updateStatsPanel(scene, target);
 }
 
-function confirmPendingHeal(scene, healer, target) {
+async function confirmPendingHeal(scene, healer, target) {
   const positionsById = {
     [healer.id]: { id: healer.id, x: healer.x, y: healer.y },
     [target.id]: { id: target.id, x: target.x, y: target.y },
   };
-  const result = scene.game_.heal(healer.id, target.id);
   scene.healTargetMode = false;
   scene.pendingHealTarget = null;
+  scene.animating = true;
   clearHighlights(scene);
   clearSelectedTileHighlight(scene);
+  const result = await runGameAction(scene, "heal", healer.id, target.id);
 
   const hpChanges = result.events.filter((e) => e.type === "HEAL").map((e) => hpChangeFromEvent(e, positionsById)).filter(Boolean);
   animateHpChanges(scene, hpChanges, () => finishUnitActionOrCharge(scene, healer));
@@ -371,12 +386,14 @@ function previewSupportTarget(scene, target) {
  * animateHpChanges step here - just the state change (target's movement
  * reset, standby cleared) and a full refresh so that shows up visually
  * (an un-standbyed target's greyed-out tint needs to clear too). */
-function confirmPendingSupport(scene, supporter, target) {
-  scene.game_.support(supporter.id, target.id);
+async function confirmPendingSupport(scene, supporter, target) {
   scene.supportTargetMode = false;
   scene.pendingSupportTarget = null;
+  scene.animating = true;
   clearHighlights(scene);
   clearSelectedTileHighlight(scene);
+  await runGameAction(scene, "support", supporter.id, target.id);
+  scene.animating = false;
   refreshUnits(scene);
   finishUnitActionOrCharge(scene, supporter);
 }
@@ -387,15 +404,17 @@ function confirmPendingSupport(scene, supporter, target) {
  * tile is just a tomb tile). Ends the summoner's turn on success, matching
  * the original's doSummon submitting ACTION_FINISH immediately after Summon.
  */
-function handleSummonTargetClick(scene, x, y) {
+async function handleSummonTargetClick(scene, x, y) {
   const summoner = scene._pendingSummoner;
 
   if (scene.game_.canSummon(summoner.id, x, y)) {
-    scene.game_.summon(summoner.id, x, y);
     scene.summonTargetMode = false;
     scene._pendingSummoner = null;
+    scene.animating = true;
     clearHighlights(scene);
     clearSelectedTileHighlight(scene);
+    await runGameAction(scene, "summon", summoner.id, x, y);
+    scene.animating = false;
     refreshUnits(scene);
     updateInfoText(scene);
     finishUnitActionOrCharge(scene, summoner);
@@ -426,7 +445,7 @@ function handleSummonTargetClick(scene, x, y) {
  * *was* its move for the turn, so there's no leftover movement-mode
  * selection to offer.
  */
-function handleBuyPlacementClick(scene, x, y) {
+async function handleBuyPlacementClick(scene, x, y) {
   const team = scene.game_.currentTeam;
   const castle = scene.pendingBuyCastle;
   const unitDefIndex = scene.pendingBuyUnitIndex;
@@ -441,8 +460,24 @@ function handleBuyPlacementClick(scene, x, y) {
   // Computed against the board as it stands right now - before the unit
   // exists - since afterward it would just block its own starting tile.
   const path = scene.game_.getSpawnMovePath(unitDefIndex, castle.x, castle.y, team, x, y);
-  const unit = scene.game_.buyUnitAt(unitDefIndex, team, castle.x, castle.y, x, y);
-  if (!unit) return;
+
+  // Set before the network round-trip, same reasoning as confirmPendingMove's
+  // identical comment - buyMode is already false by this point, so nothing
+  // else would route a stray click back here, but nothing was blocking it
+  // from falling through to a DIFFERENT click handler during the wait either.
+  scene.animating = true;
+  const boughtUnit = await runGameAction(scene, "buyUnitAt", unitDefIndex, team, castle.x, castle.y, x, y);
+  if (!boughtUnit) {
+    scene.animating = false;
+    return;
+  }
+  // Re-fetched by id - see purchaseUnit's identical comment on why the
+  // returned reference itself isn't trustworthy in networked mode.
+  const unit = scene.game_.getUnit(boughtUnit.id);
+  if (!unit) {
+    scene.animating = false;
+    return;
+  }
 
   refreshUnits(scene);
   updateInfoText(scene);
@@ -469,6 +504,7 @@ function handleBuyPlacementClick(scene, x, y) {
     }
     animateUnitMove(scene, unit, path, finish);
   } else {
+    scene.animating = false;
     finish();
   }
 }
@@ -578,7 +614,7 @@ function clearPathPreview(scene) {
   scene.pathPreviewRects = [];
 }
 
-function confirmPendingMove(scene, selectedUnit, x, y) {
+async function confirmPendingMove(scene, selectedUnit, x, y) {
   const path = scene.game_.getMovePath(selectedUnit.id, x, y);
   const origin = {
     x: selectedUnit.x,
@@ -590,13 +626,27 @@ function confirmPendingMove(scene, selectedUnit, x, y) {
   clearPathPreview(scene);
   scene.selectedUnitId = null;
   scene.pendingMoveTarget = null;
-  animateUnitMove(scene, selectedUnit, path, () => {
-    scene.game_.moveUnit(selectedUnit.id, path);
+
+  // Set before the network round-trip (not just inside animateUnitMove,
+  // which only covers the animation itself) - onTileClick's own animating
+  // guard needs to block further clicks for the WHOLE window in networked
+  // mode, not just once the animation starts; animateUnitMove sets this
+  // same flag again below, harmlessly idempotent.
+  scene.animating = true;
+  await runGameAction(scene, "moveUnit", selectedUnit.id, path);
+  // Re-fetched by id, not the pre-move reference - in networked mode
+  // scene.game_ was just wholesale replaced (see net/runGameAction.js), so
+  // selectedUnit.x/y here would still show the PRE-move position; the old
+  // local-only comment "selectedUnit.x/y are updated by moveUnit()" only
+  // held because moveUnit used to mutate that exact same object in place.
+  const unit = scene.game_.getUnit(selectedUnit.id) ?? selectedUnit;
+
+  animateUnitMove(scene, unit, path, () => {
     refreshUnits(scene);
     updateInfoText(scene);
-    selectUnitForStats(scene, selectedUnit); // selectedUnit.x/y are updated by moveUnit()
+    selectUnitForStats(scene, unit);
     scene.actionOrigin = origin;
-    showActionBar(scene, selectedUnit, x, y);
+    showActionBar(scene, unit, x, y);
   });
 }
 
@@ -636,15 +686,19 @@ function previewChargerMovePath(scene, unit, x, y) {
   showCursor(scene, x, y, "cursor_move_preview");
 }
 
-function confirmChargerMove(scene, unit, x, y) {
+async function confirmChargerMove(scene, unit, x, y) {
   const path = scene.game_.getMovePath(unit.id, x, y);
   clearHighlights(scene);
   clearPathPreview(scene);
   scene.chargerMoveMode = false;
   scene._pendingCharger = null;
   scene.pendingChargerMoveTarget = null;
-  animateUnitMove(scene, unit, path, () => {
-    scene.game_.moveUnit(unit.id, path);
+
+  scene.animating = true; // see confirmPendingMove's identical comment on why this is set before the network round-trip too
+  await runGameAction(scene, "moveUnit", unit.id, path);
+  const movedUnit = scene.game_.getUnit(unit.id) ?? unit;
+
+  animateUnitMove(scene, movedUnit, path, () => {
     refreshUnits(scene);
     updateInfoText(scene);
     // Straight to standby - no action bar, no re-check of canMoveAgain -
@@ -652,6 +706,6 @@ function confirmChargerMove(scene, unit, x, y) {
     // onStandby directly, unlike a normal confirmed move which returns to
     // STATE_ACTION. Uses finishUnitAction (not finishUnitActionOrCharge):
     // a charger's bonus move never chains into another one.
-    finishUnitAction(scene, unit);
+    finishUnitAction(scene, movedUnit);
   });
 }

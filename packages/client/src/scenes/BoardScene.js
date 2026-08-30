@@ -5,11 +5,13 @@ import tilesData from "@ae/shared/data/tiles.json";
 import { MAPS } from "../maps/index.js";
 import { TILE_SIZE, BOARD_OFFSET_Y } from "../constants.js";
 import { BOTTOM_BAR_HEIGHT } from "../ui/bottomBar.js";
+import { deserializeGameState } from "../net/deserializeGameState.js";
+import { setupNetworkedGameSync } from "../net/runGameAction.js";
 
 import { drawTileGrid, updateSelectedTileHighlight, refreshTombs } from "../render/tiles.js";
 import { refreshUnits, animateUnits } from "../render/units.js";
-import { createHud } from "../ui/hud.js";
-import { createStatsPanel } from "../ui/statsPanel.js";
+import { createHud, updateInfoText } from "../ui/hud.js";
+import { createStatsPanel, refreshStatsPanel } from "../ui/statsPanel.js";
 import { onTileClick } from "../input/boardInput.js";
 import { setupCameraDrag } from "../input/cameraDrag.js";
 
@@ -19,17 +21,31 @@ export class BoardScene extends Phaser.Scene {
   }
 
   /**
-   * Receives whatever scene.start("BoardScene", data) was called with (see
-   * SkirmishSetupScene#startGame) - map + the three configurable settings.
+   * Receives whatever scene.start("BoardScene", data) was called with.
+   * Two shapes:
+   *   - local skirmish (see SkirmishSetupScene#startGame): mapData + the
+   *     three configurable settings, builds a fresh local GameState.
+   *   - networked (see NetworkLobbyScene - not built yet as of this
+   *     comment, but this is the receiving end already in place for it):
+   *     { networked: true, socket, session, team, gameState } - gameState
+   *     is a server snapshot to deserialize rather than a mapData to build
+   *     fresh from, and every mutating action routes over `socket` instead
+   *     of calling scene.game_ directly (see net/runGameAction.js).
    * Falls back to the first auto-discovered map and the original's own
    * defaults if launched directly with no data (e.g. during dev iteration
-   * on this scene alone), so this never hard-crashes for missing input.
+   * on this scene alone), so local mode never hard-crashes for missing input.
    */
   init(data) {
-    this.mapData_ = data?.mapData ?? MAPS[0]?.data;
-    this.maxLevel_ = data?.maxLevel ?? 3; // Rule.getDefaultRule()'s implicit cap
-    this.startingGold_ = data?.startingGold ?? 300;
-    this.unitCapacity_ = data?.unitCapacity ?? 15; // POPULATION_PRESET[0]
+    this.networked_ = !!data?.networked;
+    if (this.networked_) {
+      this.net_ = { socket: data.socket, team: data.team, session: data.session, pendingResolve: null, pendingReject: null };
+      this.initialSnapshot_ = data.gameState;
+    } else {
+      this.mapData_ = data?.mapData ?? MAPS[0]?.data;
+      this.maxLevel_ = data?.maxLevel ?? 3; // Rule.getDefaultRule()'s implicit cap
+      this.startingGold_ = data?.startingGold ?? 300;
+      this.unitCapacity_ = data?.unitCapacity ?? 15; // POPULATION_PRESET[0]
+    }
   }
 
   preload() {
@@ -158,6 +174,13 @@ export class BoardScene extends Phaser.Scene {
   }
 
   create() {
+    // Board dimensions for canvas sizing (see below) come from either the
+    // local mapData or the networked snapshot - both carry width/height in
+    // the same shape (a GameState instance's own width/height fields for
+    // the snapshot, since that's literally what it's a serialization of).
+    const boardWidth = this.networked_ ? this.initialSnapshot_.width : this.mapData_.width;
+    const boardHeight = this.networked_ ? this.initialSnapshot_.height : this.mapData_.height;
+
     // Ported from this project's old "canvas sized to the board" approach
     // (see main.js's history) — but applied dynamically per-map now that
     // map choice happens at runtime, not at boot. Without this, every map
@@ -168,24 +191,32 @@ export class BoardScene extends Phaser.Scene {
     // input/cameraDrag.js instead of producing an oversized browser window.
     const MAX_VIEWPORT_WIDTH = 1000;
     const MAX_VIEWPORT_HEIGHT = 700;
-    const targetWidth = Math.min(this.mapData_.width * TILE_SIZE, MAX_VIEWPORT_WIDTH);
-    const targetHeight = Math.min(
-      BOARD_OFFSET_Y + this.mapData_.height * TILE_SIZE + BOTTOM_BAR_HEIGHT,
-      MAX_VIEWPORT_HEIGHT
-    );
+    const targetWidth = Math.min(boardWidth * TILE_SIZE, MAX_VIEWPORT_WIDTH);
+    const targetHeight = Math.min(BOARD_OFFSET_Y + boardHeight * TILE_SIZE + BOTTOM_BAR_HEIGHT, MAX_VIEWPORT_HEIGHT);
     this.scale.resize(targetWidth, targetHeight);
     this.cameras.main.setSize(targetWidth, targetHeight);
 
-    this.game_ = new GameState({
-      mapData: this.mapData_,
-      unitDefs: unitsData.units,
-      tileDefs: tilesData.tiles,
-      players: [
-        { team: 0, type: 1, alliance: 0, gold: this.startingGold_ },
-        { team: 1, type: 1, alliance: 1, gold: this.startingGold_ },
-      ],
-      rule: { maxLevel: this.maxLevel_, unitCapacity: this.unitCapacity_ },
-    });
+    if (this.networked_) {
+      // Deserialized from the server's snapshot, not built fresh - see
+      // net/deserializeGameState.js. Every subsequent mutating action goes
+      // through net/runGameAction.js instead of calling scene.game_
+      // directly; see input/boardInput.js/ui/actionBar.js/ui/bottomBar.js
+      // for those call sites, all `await runGameAction(scene, ...)` now.
+      this.game_ = deserializeGameState(this.initialSnapshot_, unitsData.units, tilesData.tiles);
+      setupNetworkedGameSync(this, unitsData.units, tilesData.tiles, (msg) => this.onOpponentAction(msg));
+      this.onGameOver = () => this.showNetworkedGameOver();
+    } else {
+      this.game_ = new GameState({
+        mapData: this.mapData_,
+        unitDefs: unitsData.units,
+        tileDefs: tilesData.tiles,
+        players: [
+          { team: 0, type: 1, alliance: 0, gold: this.startingGold_ },
+          { team: 1, type: 1, alliance: 1, gold: this.startingGold_ },
+        ],
+        rule: { maxLevel: this.maxLevel_, unitCapacity: this.unitCapacity_ },
+      });
+    }
 
     // Whichever map SkirmishSetupScene passed in (see init() above) - covers
     // whatever unit/terrain layout that map defines; no longer hardcoded to
@@ -227,6 +258,44 @@ export class BoardScene extends Phaser.Scene {
     createHud(this);
     createStatsPanel(this);
     setupCameraDrag(this);
+  }
+
+  /**
+   * Networked-mode only: fired by net/runGameAction.js's persistent
+   * game_update listener when a broadcast reports the OPPONENT's action
+   * (not something this client itself sent - see setupNetworkedGameSync's
+   * own docstring on that distinction). scene.game_ has already been
+   * replaced with the fresh authoritative snapshot by the time this runs;
+   * this just re-renders everything from it.
+   *
+   * Deliberately a full re-render, not the same spark/shake/damage-number
+   * animation the LOCAL confirmPendingAttack/confirmPendingHeal/etc paths
+   * get (see boardInput.js) - replaying that for an arbitrary opponent
+   * action would need a per-action-type animation replayer keyed off
+   * msg.actionType/msg.result that doesn't exist yet. Flagged as a
+   * follow-up, not attempted here; the opponent's move is still reflected
+   * correctly and promptly, just without the extra visual flourish.
+   */
+  onOpponentAction(msg) {
+    refreshUnits(this);
+    refreshTombs(this);
+    refreshStatsPanel(this);
+    updateInfoText(this);
+  }
+
+  /** Bare-minimum "the game just ended" notice for networked play - the
+   * session file is already gone server-side by the time this fires (see
+   * server/src/sessions.js's applySessionAction), so there's nothing left
+   * to do here but tell the player. Deliberately simple: no win/lose
+   * breakdown UI, that's a further polish pass, not attempted here. */
+  showNetworkedGameOver() {
+    const { width, height } = this.cameras.main;
+    this.add.rectangle(0, 0, width, height, 0x000000, 0.6).setScrollFactor(0).setDepth(1000);
+    this.add
+      .text(width / 2, height / 2, "Game Over", { fontSize: "32px", color: "#ffdd44", fontStyle: "bold" })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(1001);
   }
 
     update(time, delta) {

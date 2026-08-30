@@ -9,6 +9,7 @@ import { handleActionBarCancelClick } from "../input/boardInput.js";
 import { BOTTOM_BAR_HEIGHT } from "./bottomBar.js";
 import { panCameraToUnit, getCameraTargetForUnit } from "../render/camera.js";
 import { canMoveAgain } from "@ae/shared/src/combat.js";
+import { runGameAction } from "../net/runGameAction.js";
 
 /** Returns [{x,y}] of enemy-occupied tiles within `unit`'s attack range. */
 function getAttackableEnemyPositions(scene, unit) {
@@ -47,13 +48,29 @@ export function clearActionBar(scene) {
   scene.actionBarUnitId = null;
 }
 
-/** Marks the unit's turn as done, closes the bar, and re-renders. */
-export function finishUnitAction(scene, unit) {
+/** Marks the unit's turn as done, closes the bar, and re-renders. Async now
+ * (see runGameAction below) - every caller fire-and-forgets this the same
+ * way they already fire-and-forget the OTHER async confirm functions in
+ * input/boardInput.js (nothing downstream needs to await its completion),
+ * so none of those call sites needed to change. */
+export async function finishUnitAction(scene, unit) {
+  // Re-fetched by id rather than trusting the passed-in reference directly -
+  // in networked mode, scene.game_ gets wholesale REPLACED with a freshly
+  // deserialized instance once the action's broadcast arrives (see
+  // net/runGameAction.js), so any `unit` object a caller captured BEFORE
+  // that await is now a detached, possibly-stale snapshot - e.g. an
+  // attacker that took counter damage would still show its PRE-attack HP.
+  // Harmless in local mode, where it's already the live object.
+  unit = scene.game_.getUnit(unit.id) ?? unit;
+  if (!unit) return;
   // Routed through GameState#standby (not a direct unit.standby=true mutation)
   // so the aura scan runs - see turn.js's applyAuraEffects: a nearby
   // ATTACK_AURA/SLOWING_AURA/REFRESH_AURA holder needs every standby to
-  // trigger it, not just its own.
-  scene.game_.standby(unit.id);
+  // trigger it, not just its own. Goes through runGameAction (not a direct
+  // call) even here - standby has real authoritative effects (aura
+  // triggers, tomb hazard poison), so networked mode needs the server to
+  // confirm it just like any other action, not just apply it locally.
+  await runGameAction(scene, "standby", unit.id);
   clearActionBar(scene);
   scene.selectedUnitId = null;
   scene.actionOrigin = null;
@@ -73,11 +90,24 @@ export function finishUnitAction(scene, unit) {
  * Otherwise this is just finishUnitAction.
  */
 export function finishUnitActionOrCharge(scene, unit) {
-  if (!canMoveAgain(unit)) {
+  // Same re-fetch-by-id reasoning as finishUnitAction above - canMoveAgain
+  // below reads currentHp/currentMovementPoint/abilities directly off
+  // `unit`, so a stale networked-mode reference could give a wrong answer
+  // (e.g. an attacker that took lethal counter damage still showing alive).
+  // If the unit is gone entirely (died from that same counter), fall
+  // through to finishUnitAction directly rather than falling back to the
+  // stale object - canMoveAgain on a stale "still alive" reference would
+  // incorrectly say yes for a unit that's actually dead now.
+  const freshUnit = scene.game_.getUnit(unit.id);
+  if (!freshUnit) {
     finishUnitAction(scene, unit);
     return;
   }
-  enterChargerMoveMode(scene, unit);
+  if (!canMoveAgain(freshUnit)) {
+    finishUnitAction(scene, freshUnit);
+    return;
+  }
+  enterChargerMoveMode(scene, freshUnit);
 }
 
 /**
@@ -228,8 +258,10 @@ export function showActionBar(scene, unit, x, y) {
   if (canOccupy) {
     otherActions.push({
       frame: ACTION_ICON.OCCUPY,
-      onClick: () => {
-        scene.game_.occupy(unit.id, x, y);
+      onClick: async () => {
+        scene.animating = true;
+        await runGameAction(scene, "occupy", unit.id, x, y);
+        scene.animating = false;
         refreshTileTexture(scene, x, y);
         finishUnitActionOrCharge(scene, unit);
       },
@@ -238,8 +270,10 @@ export function showActionBar(scene, unit, x, y) {
   if (canRepairHere) {
     otherActions.push({
       frame: ACTION_ICON.REPAIR,
-      onClick: () => {
-        scene.game_.repair(unit.id, x, y);
+      onClick: async () => {
+        scene.animating = true;
+        await runGameAction(scene, "repair", unit.id, x, y);
+        scene.animating = false;
         refreshTileTexture(scene, x, y);
         finishUnitActionOrCharge(scene, unit);
       },

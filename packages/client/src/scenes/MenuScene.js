@@ -46,5 +46,16 @@ export class MenuScene extends Phaser.Scene {
     skirmishButton.on("pointerup", () => {
       this.scene.start("SkirmishSetupScene");
     });
+
+    const networkButton = this.add
+      .text(width / 2, height * 0.6, "[ Network ]", {
+        fontSize: "20px",
+        color: "#44aaff",
+      })
+      .setOrigin(0.5)
+      .setInteractive();
+    networkButton.on("pointerup", () => {
+      this.scene.start("NetworkMenuScene");
+    });
   }
 }

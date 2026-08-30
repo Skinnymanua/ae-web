@@ -14,6 +14,11 @@ import {
  * caller's current indices via init(data) and hands the (possibly changed)
  * indices back the same way on "Back" - see SkirmishSetupScene#init for the
  * receiving end of that round trip, and #openSettings for how it gets here.
+ *
+ * `returnScene`/`returnExtra` let a different caller reuse this same
+ * submenu (see CreateGameScene, which shares this rather than duplicating
+ * the three steppers again) - defaults to SkirmishSetupScene for backward
+ * compatibility with the original local-skirmish flow.
  */
 export class SkirmishSettingsScene extends Phaser.Scene {
   constructor() {
@@ -25,6 +30,8 @@ export class SkirmishSettingsScene extends Phaser.Scene {
     this.maxLevelIndex = data?.maxLevelIndex ?? MAX_LEVEL_OPTIONS.indexOf(DEFAULT_MAX_LEVEL);
     this.startingGoldIndex = data?.startingGoldIndex ?? STARTING_GOLD_OPTIONS.indexOf(DEFAULT_STARTING_GOLD);
     this.unitCapacityIndex = data?.unitCapacityIndex ?? UNIT_CAPACITY_OPTIONS.indexOf(DEFAULT_UNIT_CAPACITY);
+    this.returnScene = data?.returnScene ?? "SkirmishSetupScene";
+    this.returnExtra = data?.returnExtra ?? {};
   }
 
   create() {
@@ -53,7 +60,8 @@ export class SkirmishSettingsScene extends Phaser.Scene {
       .setInteractive();
     backButton.on("pointerup", (pointer, localX, localY, event) => {
       event.stopPropagation();
-      this.scene.start("SkirmishSetupScene", {
+      this.scene.start(this.returnScene, {
+        ...this.returnExtra,
         selectedMapId: this.selectedMapId,
         maxLevelIndex: this.maxLevelIndex,
         startingGoldIndex: this.startingGoldIndex,

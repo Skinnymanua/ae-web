@@ -21,6 +21,7 @@ import { clearHighlights, refreshTombs } from "../render/tiles.js";
 import { refreshUnits } from "../render/units.js";
 import { refreshStatsPanel } from "./statsPanel.js";
 import { animateHpChanges } from "../render/hpChange.js";
+import { runGameAction } from "../net/runGameAction.js";
 
 export const BOTTOM_BAR_HEIGHT = 44;
 const BAR_HEIGHT = BOTTOM_BAR_HEIGHT;
@@ -57,8 +58,10 @@ export function createBottomBar(scene) {
   container.add(bg);
   bg.on("pointerdown", () => {
     if (scene.modalOpen || scene.animating || scene.actionBarOpen) return;
-    showConfirm(scene, "End your turn?", () => {
-      const result = scene.game_.endTurn();
+    showConfirm(scene, "End your turn?", async () => {
+      scene.animating = true;
+      const result = await runGameAction(scene, "endTurn");
+      scene.animating = false;
       scene.selectedUnitId = null;
       clearHighlights(scene);
       updateBottomBarEconomy(scene);

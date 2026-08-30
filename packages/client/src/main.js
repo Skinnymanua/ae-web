@@ -2,6 +2,10 @@ import Phaser from "phaser";
 import { MenuScene } from "./scenes/MenuScene.js";
 import { SkirmishSetupScene } from "./scenes/SkirmishSetupScene.js";
 import { SkirmishSettingsScene } from "./scenes/SkirmishSettingsScene.js";
+import { NetworkMenuScene } from "./scenes/NetworkMenuScene.js";
+import { CreateGameScene } from "./scenes/CreateGameScene.js";
+import { JoinGameScene } from "./scenes/JoinGameScene.js";
+import { NetworkLobbyScene } from "./scenes/NetworkLobbyScene.js";
 import { BoardScene } from "./scenes/BoardScene.js";
 import { MENU_WIDTH, MENU_HEIGHT } from "./constants.js";
 
@@ -15,5 +19,18 @@ new Phaser.Game({
   height: MENU_HEIGHT,
   parent: "game",
   backgroundColor: "#222222",
-  scene: [MenuScene, SkirmishSetupScene, SkirmishSettingsScene, BoardScene],
+  // Needed for ui/textInput.js's HTML <input> overlay (session name/password
+  // entry) - Phaser has no native text field, this is the standard way to
+  // host real HTML form elements positioned within a Phaser scene.
+  dom: { createContainer: true },
+  scene: [
+    MenuScene,
+    SkirmishSetupScene,
+    SkirmishSettingsScene,
+    NetworkMenuScene,
+    CreateGameScene,
+    JoinGameScene,
+    NetworkLobbyScene,
+    BoardScene,
+  ],
 });

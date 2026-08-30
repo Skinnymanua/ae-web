@@ -8,6 +8,11 @@ export const TILE_SIZE = 48;
 export const MENU_WIDTH = 800;
 export const MENU_HEIGHT = 600;
 
+// packages/server's WebSocket endpoint (see server/src/index.js's PORT).
+// Same-origin ws:// on port 8080 for local dev; override via env for a real
+// deployment where the server isn't on localhost.
+export const SERVER_WS_URL = import.meta.env?.VITE_SERVER_WS_URL ?? "ws://localhost:8080";
+
 // Height of the top stats bar (see ui/statsPanel.js) — the board is drawn shifted
 // down by this much so the bar sits in its own space above the map, not overlapping it.
 export const BOARD_OFFSET_Y = 76;

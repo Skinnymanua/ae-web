@@ -11,6 +11,7 @@
  *   { type: "create_session", name, mapId, mapData, maxLevel, startingGold, unitCapacity, password? }
  *   { type: "join_session", sessionId, password? }
  *   { type: "leave_session" }
+ *   { type: "start_game" }
  *   { type: "game_action", actionType, params }
  *     - actionType/params: see actions.js's ACTIONS table (attack, heal,
  *       moveUnit, endTurn, etc.) - params match that action's GameState
@@ -18,18 +19,26 @@
  *
  * Server -> client message types:
  *   { type: "session_list", sessions }
- *   { type: "session_created", session, team }
+ *   { type: "session_created", session, team, gameState }
  *   { type: "session_joined", session, team, gameState }
  *   { type: "join_error", reason }              // not_found | wrong_password | full
  *   { type: "player_joined", team }              // broadcast to whoever's already there
  *   { type: "player_disconnected", team }        // broadcast on a socket closing
- *   { type: "game_update", actionType, result, gameOver }  // broadcast after any action
+ *   { type: "game_started" }                     // broadcast to both, in response to either one's start_game
+ *   { type: "game_update", actionType, result, gameOver, gameState }  // broadcast after any action - gameState is a fresh full snapshot, always apply that, never recompute locally (RNG)
  *   { type: "action_error", reason }             // unknown_action | not_your_turn | not_your_unit
  *   { type: "error", message }                   // malformed/unhandled message
  */
 import { WebSocketServer } from "ws";
 import { loadUnits, loadTiles } from "@ae/shared";
-import { createSession, listSessions, joinSession, markDisconnected, applySessionAction } from "./sessions.js";
+import {
+  createSession,
+  listSessions,
+  joinSession,
+  markDisconnected,
+  applySessionAction,
+  getSerializedGameState,
+} from "./sessions.js";
 import { applyNetworkAction } from "./actions.js";
 
 const PORT = process.env.PORT || 8080;
@@ -84,7 +93,7 @@ function handleMessage(socket, message) {
       const { name, mapId, mapData, maxLevel, startingGold, unitCapacity, password } = message;
       const session = createSession({ name, mapId, mapData, maxLevel, startingGold, unitCapacity, password });
       registerSocket(session.id, 0, socket);
-      send(socket, { type: "session_created", session, team: 0 });
+      send(socket, { type: "session_created", session, team: 0, gameState: getSerializedGameState(session.id) });
       return;
     }
 
@@ -102,6 +111,23 @@ function handleMessage(socket, message) {
 
     case "leave_session": {
       leaveCurrentSession(socket);
+      return;
+    }
+
+    case "start_game": {
+      const { sessionId } = socket;
+      if (sessionId === undefined) {
+        send(socket, { type: "error", message: "not in a session" });
+        return;
+      }
+      // Broadcast to EVERYONE in the session, including the sender (no
+      // exceptSocket) - both players' clients handle this through the SAME
+      // "on game_started, transition to BoardScene" listener (see
+      // NetworkLobbyScene), whether they clicked Start themselves or their
+      // opponent did. Purely a coordination signal - doesn't touch the
+      // GameState at all, so there's no applySessionAction/authority check
+      // involved here the way game_action has.
+      broadcast(sessionId, { type: "game_started" });
       return;
     }
 
@@ -127,6 +153,10 @@ function handleMessage(socket, message) {
         actionType: message.actionType,
         result: outcome.result.result,
         gameOver: outcome.gameOver,
+        // A fresh full snapshot, not just the bare result - see
+        // getSerializedGameState's own docstring for why clients should
+        // apply THIS rather than recomputing the action themselves (RNG).
+        gameState: getSerializedGameState(sessionId),
       });
       return;
     }
