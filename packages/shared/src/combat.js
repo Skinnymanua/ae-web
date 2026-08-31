@@ -166,7 +166,7 @@ export function getAttackBonus(attacker, defender, attackerTile, context) {
   if (hasAbility(attacker, ABILITY.FIGHTER_OF_THE_SEA) && attackerTile.type === TILE_TYPE.WATER) bonus += 10;
   if (hasAbility(attacker, ABILITY.MARKSMAN) && hasAbility(defender, ABILITY.AIR_FORCE)) bonus += 15;
   if (hasAbility(attacker, ABILITY.BLOODTHIRSTY)) bonus += 10 * countEnemiesWithin(context, attacker, 2);
-  if (hasStatus(attacker, STATUS.INSPIRED)) bonus += 10;
+  if (hasStatus(attacker, STATUS.INSPIRED)) bonus += attacker.maxAttackRange > 1 ? 5 : 10; // halved for ranged attacks
   return bonus;
 }
 

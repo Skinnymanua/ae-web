@@ -75,6 +75,90 @@ export function drawDialogBorder(scene, container, width, height, borderSize = 1
   piece(7, width - borderSize, height - borderSize, borderSize, borderSize); // bottom-right corner
 }
 
+/**
+ * Circular confirm/cancel-style icon button matching the mobile reskin's
+ * own bottom-corner controls (navy circle, silver ring, yellow glyph) - see
+ * a real screenshot of that game's buy dialog for the reference this is
+ * built from. Replaces this project's earlier bracketed-text buttons
+ * ("[ Yes ]"/"[ No ]"/"[ Buy ]"/"[ Cancel ]") wherever they appeared.
+ * `iconType` is "confirm" (checkmark) or "cancel" (a plain left-pointing
+ * arrow, standing in for the reference's curved back-arrow - Phaser
+ * Graphics has no easy primitive for that exact curve, and a straight arrow
+ * reads the same "go back" meaning without needing a custom image asset).
+ *
+ * `container`, if given, parents the button to it (x/y are then
+ * container-local, as with any other dialog child). Pass null for a
+ * scene-level button instead (x/y are then absolute scene coordinates) -
+ * see showBuyMenu's Buy/Cancel, which sit fixed at the screen's bottom
+ * corners rather than inside the dialog panel itself, matching the
+ * reference screenshot's own layout.
+ *
+ * Returns { zone, setEnabled } so callers can dynamically grey it out and
+ * disable it, same as the old text buttons' setColor/disableInteractive
+ * pattern (see showBuyMenu's buyButton, which needs exactly this whenever the
+ * currently-selected unit isn't actually purchasable).
+ */
+function addIconButton(scene, container, x, y, radius, iconType) {
+  const circleG = scene.add.graphics().setScrollFactor(0);
+  const iconG = scene.add.graphics().setScrollFactor(0);
+  if (container) {
+    container.add([circleG, iconG]);
+  } else {
+    circleG.setDepth(DEPTH.DIALOG);
+    iconG.setDepth(DEPTH.DIALOG);
+  }
+
+  function draw(enabled) {
+    circleG.clear();
+    circleG.fillStyle(0x242b47, 1);
+    circleG.fillCircle(x, y, radius);
+    circleG.lineStyle(3, enabled ? 0xb8bec9 : 0x555a66, 1);
+    circleG.strokeCircle(x, y, radius);
+
+    iconG.clear();
+    const color = enabled ? 0xffdd44 : 0x77775f;
+    if (iconType === "confirm") {
+      iconG.lineStyle(Math.max(2, radius * 0.22), color, 1);
+      iconG.beginPath();
+      iconG.moveTo(x - radius * 0.45, y + radius * 0.05);
+      iconG.lineTo(x - radius * 0.1, y + radius * 0.35);
+      iconG.lineTo(x + radius * 0.45, y - radius * 0.35);
+      iconG.strokePath();
+    } else {
+      iconG.fillStyle(color, 1);
+      const headSize = radius * 0.35;
+      iconG.fillTriangle(x - radius * 0.45, y, x - radius * 0.05, y - headSize, x - radius * 0.05, y + headSize);
+      iconG.fillRect(x - radius * 0.05, y - radius * 0.14, radius * 0.55, radius * 0.28);
+    }
+  }
+
+  draw(true);
+  const zone = scene.add.zone(x, y, radius * 2, radius * 2).setOrigin(0.5).setScrollFactor(0).setInteractive();
+  if (container) {
+    container.add(zone);
+  } else {
+    zone.setDepth(DEPTH.DIALOG);
+  }
+
+  return {
+    zone,
+    setEnabled(enabled) {
+      draw(enabled);
+      if (enabled) zone.setInteractive();
+      else zone.disableInteractive();
+    },
+    // Only meaningful (and only ever called) for a scene-level button
+    // (container=null) - a container-parented one is already cleaned up
+    // automatically when that container's own .destroy() runs, and calling
+    // this a second time on already-destroyed children would throw.
+    destroy() {
+      circleG.destroy();
+      iconG.destroy();
+      zone.destroy();
+    },
+  };
+}
+
 /** Simple modal Yes/No confirm box. Sets scene.modalOpen while shown, blocking board input. */
 export function showConfirm(scene, message, onYes, onNo) {
   scene.modalOpen = true;
@@ -89,9 +173,9 @@ export function showConfirm(scene, message, onYes, onNo) {
   const text = scene.add
     .text(0, -30, message, { fontSize: "14px", color: "#ffffff", wordWrap: { width: 230 }, align: "center" })
     .setOrigin(0.5, 0.5);
-  const yesText = scene.add.text(-60, 25, "[ Yes ]", { fontSize: "16px", color: "#44dd88" }).setScrollFactor(0).setInteractive();
-  const noText = scene.add.text(20, 25, "[ No ]", { fontSize: "16px", color: "#dd4444" }).setScrollFactor(0).setInteractive();
-  container.add([bg, text, yesText, noText]);
+  container.add([bg, text]);
+  const yesButton = addIconButton(scene, container, -40, 30, 18, "confirm");
+  const noButton = addIconButton(scene, container, 40, 30, 18, "cancel");
 
   // pointerup (not pointerdown), with stopPropagation - matches the action
   // bar's own icons (see ui/actionBar.js's showActionBar comment on this
@@ -102,13 +186,13 @@ export function showConfirm(scene, message, onYes, onNo) {
   // render/tiles.js), silently triggering a bogus board click right after
   // the dialog closes. Using pointerup + stopPropagation consumes that same
   // event here instead of letting it leak through.
-  yesText.on("pointerup", (pointer, localX, localY, event) => {
+  yesButton.zone.on("pointerup", (pointer, localX, localY, event) => {
     event.stopPropagation();
     scene.modalOpen = false;
     container.destroy();
     onYes?.();
   });
-  noText.on("pointerup", (pointer, localX, localY, event) => {
+  noButton.zone.on("pointerup", (pointer, localX, localY, event) => {
     event.stopPropagation();
     scene.modalOpen = false;
     container.destroy();
@@ -188,8 +272,7 @@ export function showBuyMenu(scene, castleX, castleY) {
 
   const statY = 46;
   const descY = statY + 32;
-  const buyY = descY + descBlockHeight + 12;
-  const stripY = buyY + 30;
+  const stripY = descY + descBlockHeight + 12; // Buy/Cancel now live at the screen's bottom corners (see below), not a dedicated row inside the panel
   const panelHeight = Math.min(stripY + stripHeight + 16, cam.height - 20);
 
   const container = scene.add.container(cam.width / 2 - panelWidth / 2, cam.height / 2 - panelHeight / 2);
@@ -201,8 +284,8 @@ export function showBuyMenu(scene, castleX, castleY) {
   // Phaser's input hit-testing separately factors camera.scroll * the child's
   // OWN scrollFactor, so any interactive element left at the default
   // scrollFactor(1) silently drifts from where it's drawn by however far the
-  // camera has panned. Every interactive child added below (buyText,
-  // cancelText, the purchase strip's badges, ...) needs its own explicit
+  // camera has panned. Every interactive child added below (buyButton,
+  // cancelButton, the purchase strip's badges, ...) needs its own explicit
   // .setScrollFactor(0) - don't rely on this call alone.
   container.setDepth(DEPTH.DIALOG);
 
@@ -217,14 +300,16 @@ export function showBuyMenu(scene, castleX, castleY) {
       wordWrap: { width: panelWidth - 32 },
     });
     container.add(noneText);
-    const closeText = scene.add.text(16, panelHeight - 28, "[ Close ]", { fontSize: "13px", color: "#dd4444" }).setScrollFactor(0).setInteractive();
-    // pointerup + stopPropagation - see yesText/noText above for why.
-    closeText.on("pointerup", (pointer, localX, localY, event) => {
+    // "cancel" (the back-arrow glyph) rather than "confirm" here - there's
+    // nothing to confirm in this state, just dismiss the dialog, same as
+    // the icon showBuyMenu's own Cancel button uses.
+    const closeButton = addIconButton(scene, container, panelWidth / 2, panelHeight - 24, 16, "cancel");
+    // pointerup + stopPropagation - see yesButton/noButton above for why.
+    closeButton.zone.on("pointerup", (pointer, localX, localY, event) => {
       event.stopPropagation();
       scene.modalOpen = false;
       container.destroy();
     });
-    container.add(closeText);
     return;
   }
 
@@ -271,13 +356,17 @@ export function showBuyMenu(scene, castleX, castleY) {
   });
   container.add(descText);
 
-  const buyText = scene.add.text(16, buyY, "[ Buy ]", { fontSize: "14px", color: "#44dd88" }).setScrollFactor(0).setInteractive();
-  container.add(buyText);
-  const cancelText = scene.add
-    .text(panelWidth - 78, buyY, "[ Cancel ]", { fontSize: "14px", color: "#dd4444" })
-    .setScrollFactor(0)
-    .setInteractive();
-  container.add(cancelText);
+  // Fixed at the screen's bottom corners (container=null - see
+  // addIconButton's own docstring), not inside the dialog panel - matches
+  // the reference screenshot's own layout exactly, and means these two
+  // stay put regardless of how tall the panel above them ends up being.
+  // Cleared above the bottom economy bar (44px - see ui/bottomBar.js's own
+  // BOTTOM_BAR_HEIGHT, duplicated here as a literal rather than imported:
+  // bottomBar.js itself imports showConfirm from this file, so importing
+  // back would be circular) with a bit of margin, not flush against it.
+  const buyButtonY = cam.height - 44 - 36;
+  const buyButton = addIconButton(scene, null, 50, buyButtonY, 24, "confirm");
+  const cancelButton = addIconButton(scene, null, cam.width - 50, buyButtonY, 24, "cancel");
 
   // container is at scene-space (containerX, containerY); the strip needs that
   // same scene space for its mask/hit-zone - see purchaseStrip.js's doc comment.
@@ -318,12 +407,11 @@ export function showBuyMenu(scene, castleX, castleY) {
     const canBuy = canAfford && scene.game_.canPlacePurchase(def.index, castleX, castleY, team);
     goldGroup.text.setColor(canAfford ? "#ffdd44" : "#dd4444");
 
-    buyText.off("pointerup");
+    buyButton.zone.off("pointerup");
     if (canBuy) {
-      buyText.setColor("#44dd88");
-      buyText.setInteractive();
-      // pointerup + stopPropagation - see yesText/noText's comment near the
-      // top of this file for why this matters here specifically: this is
+      buyButton.setEnabled(true);
+      // pointerup + stopPropagation - see yesButton/noButton's comment near
+      // the top of this file for why this matters here specifically: this is
       // the handler that enters scene.buyMode (occupied castle) or spawns
       // the unit outright (empty castle), and container.destroy() runs
       // synchronously inside it. A leaked pointerdown-then-pointerup pair
@@ -333,16 +421,17 @@ export function showBuyMenu(scene, castleX, castleY) {
       // scene.buyMode is freshly true - which reads as the purchase
       // "flashing and cancelling itself" with the highlights clearing and
       // nothing actually bought.
-      buyText.on("pointerup", (pointer, localX, localY, event) => {
+      buyButton.zone.on("pointerup", (pointer, localX, localY, event) => {
         event.stopPropagation();
         strip.destroy();
         scene.modalOpen = false;
         container.destroy();
+        buyButton.destroy();
+        cancelButton.destroy();
         purchaseUnit(scene, def, castleX, castleY, team);
       });
     } else {
-      buyText.setColor("#666677");
-      buyText.disableInteractive();
+      buyButton.setEnabled(false);
     }
   }
 
@@ -378,12 +467,14 @@ export function showBuyMenu(scene, castleX, castleY) {
     onSelect: (item) => selectUnit(item.def),
   });
 
-  // pointerup + stopPropagation - see buyText's comment above for why.
-  cancelText.on("pointerup", (pointer, localX, localY, event) => {
+  // pointerup + stopPropagation - see buyButton's comment above for why.
+  cancelButton.zone.on("pointerup", (pointer, localX, localY, event) => {
     event.stopPropagation();
     strip.destroy();
     scene.modalOpen = false;
     container.destroy();
+    buyButton.destroy();
+    cancelButton.destroy();
   });
 
   strip.select(listed[0].index);

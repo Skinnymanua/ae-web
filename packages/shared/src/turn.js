@@ -389,8 +389,18 @@ function tickStatus(unit, tile) {
  * ANY unit goes standby (see GameState#standby), not just aura-bearers - the
  * ability checks below gate whether anything actually happens.
  *
- * - ATTACK_AURA inspires every ally within 2 tiles (+10 attack, see
- *   combat.js's getAttackBonus).
+ * - ATTACK_AURA inspires allies who are ALREADY on standby, within 2 tiles
+ *   (+10 attack, halved for a ranged inspired attacker - see combat.js's
+ *   getAttackBonus). Only standby allies, not anyone still able to act this
+ *   turn - the whole point is prepping a unit that's already spent its turn
+ *   for its NEXT one, not stacking with an attack it could still make right
+ *   now. remainingTurn: 1 (not 0) is what makes that actually work: statuses
+ *   tick down once at the start of the STATUS HOLDER's own next incoming
+ *   turn (see tickStatus above) - the opponent's turn in between never ticks
+ *   it - so remainingTurn: 1 survives that one intervening opponent turn and
+ *   is still active (ticking to 0, not below) right when the inspired unit
+ *   gets to act again. remainingTurn: 0 would clear it at that exact
+ *   moment, before it could ever be used.
  * - SLOWING_AURA does the same to enemies (movement capped to 1 - see
  *   resetUnitForTurn above) unless they carry SLOWING_AURA themselves.
  * - REFRESH_AURA does two independent things to anyone in range: cleanses a
@@ -417,8 +427,8 @@ export function applyAuraEffects(game, rule, units, unit) {
     if (target.id === unit.id || manhattanRange(unit, target) > 2) continue;
     const targetIsEnemy = isEnemy(game, unit.team, target.team);
 
-    if (hasAbility(unit, ABILITY.ATTACK_AURA) && !targetIsEnemy) {
-      attachStatus(target, { type: STATUS.INSPIRED, remainingTurn: 0 });
+    if (hasAbility(unit, ABILITY.ATTACK_AURA) && !targetIsEnemy && target.standby) {
+      attachStatus(target, { type: STATUS.INSPIRED, remainingTurn: 1 });
     }
     if (hasAbility(unit, ABILITY.SLOWING_AURA) && targetIsEnemy && !hasAbility(target, ABILITY.SLOWING_AURA)) {
       attachStatus(target, { type: STATUS.SLOWED, remainingTurn: 1 });

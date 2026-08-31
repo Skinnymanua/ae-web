@@ -102,7 +102,7 @@
         "movement": 0
       },
       "minAttackRange": 1,
-      "maxAttackRange": 1,
+      "maxAttackRange": 2,
       "isCommander": false,
       "isSkeleton": false,
       "isCrystal": false
@@ -491,6 +491,10 @@
         {
           "id": 29,
           "name": "SUPPORT"
+        },
+        {
+          "id": 20,
+          "name": "ATTACK_AURA"
         }
       ],
       "growth": {
@@ -534,7 +538,7 @@
         "movement": 0
       },
       "minAttackRange": 3,
-      "maxAttackRange": 7,
+      "maxAttackRange": 5,
       "isCommander": false,
       "isSkeleton": false,
       "isCrystal": false
@@ -574,7 +578,7 @@
         "magicDefence": 5,
         "movement": 0
       },
-      "minAttackRange": 2,
+      "minAttackRange": 1,
       "maxAttackRange": 3,
       "isCommander": false,
       "isSkeleton": false,
