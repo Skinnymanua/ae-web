@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { ACTION_ICON, STAT_ICON, TILE_SIZE, BOARD_OFFSET_Y, DEPTH } from "../constants.js";
 import { clearHighlights, highlightPositionSet, refreshTileTexture, refreshTombs } from "../render/tiles.js";
 import { refreshUnits } from "../render/units.js";
+import { animateHpChanges } from "../render/hpChange.js";
 import { showBuyMenu } from "./dialogs.js";
 import { updateInfoText } from "./hud.js";
 import { refreshStatsPanel } from "./statsPanel.js";
@@ -70,15 +71,28 @@ export async function finishUnitAction(scene, unit) {
   // call) even here - standby has real authoritative effects (aura
   // triggers, tomb hazard poison), so networked mode needs the server to
   // confirm it just like any other action, not just apply it locally.
-  await runGameAction(scene, "standby", unit.id);
+  const result = await runGameAction(scene, "standby", unit.id);
   clearActionBar(scene);
   scene.selectedUnitId = null;
   scene.actionOrigin = null;
   clearHighlights(scene);
-  refreshUnits(scene);
-  refreshTombs(scene); // standby may have just consumed a tomb (applyTombHazard) or an attack just before it may have created one
-  updateInfoText(scene);
-  refreshStatsPanel(scene);
+  const finish = () => {
+    refreshUnits(scene);
+    refreshTombs(scene); // standby may have just consumed a tomb (applyTombHazard) or an attack just before it may have created one
+    updateInfoText(scene);
+    refreshStatsPanel(scene);
+  };
+  // Empty unless the standing-by unit itself carries REFRESH_AURA and
+  // actually healed (or hit) something nearby - see GameState#standby's own
+  // comment on why this is otherwise silent. Without this, that heal/hit
+  // still happened (currentHp genuinely changed), just with no floating
+  // number or bar animation - the affected unit's HP would only visibly
+  // update once refreshUnits below redrew it from the new value directly.
+  if (result?.hpChanges?.length > 0) {
+    animateHpChanges(scene, result.hpChanges, finish);
+  } else {
+    finish();
+  }
 }
 
 /**
@@ -182,32 +196,78 @@ export function enterSupportTargetMode(scene, unit) {
   highlightPositionSet(scene, scene.game_.getSupportablePositions(unit.id), 0x3399ff, 0.4);
 }
 
-// Compass slots around the unit — confirmed against a real screenshot of the
-// commercial game (not in the open-source project_aeii repo at all — that one's a
-// plain centered horizontal row). Move is always "left" and standby always "top"
-// when both are shown; whatever other actions apply (attack, occupy, repair, buy,
-// summon) fill "right" first, then the corners, in priority order — e.g. a
-// commander on his own castle with no enemy in range gets buy on the RIGHT (not a
-// fixed slot), because attack isn't available to compete for it that turn.
-const RADIUS = TILE_SIZE * 0.95;
-const BUTTON_RADIUS = 20;
+// Buttons arranged around the unit, in a shape that depends on the button
+// count - confirmed against a real screenshot of the commercial game (not
+// in the open-source project_aeii repo at all - that one's a plain
+// centered horizontal row, and only shows its own "move" button in the
+// separate buy-castle state, never alongside standby/attack/etc. the way
+// this port's move/cancel button does - see below).
+const RADIUS = TILE_SIZE * 0.95; // orbit distance from the unit's center - NOT a button's own size, see BUTTON_RADIUS below
+const BUTTON_RADIUS = 20; // each button's own circle size
 const ICON_CLEARANCE = BUTTON_RADIUS + 2; // button radius + a small gap, for clamping to stay on-board
-const SLOT_OFFSET = {
-  top: { x: 0, y: -RADIUS },
-  topRight: { x: RADIUS * 0.7, y: -RADIUS * 0.7 },
-  right: { x: RADIUS, y: 0 },
-  bottomRight: { x: RADIUS * 0.7, y: RADIUS * 0.7 },
-  // bottom: reserved for heal/resurrect once that logic exists
-  bottomLeft: { x: -RADIUS * 0.7, y: RADIUS * 0.7 },
-  left: { x: -RADIUS, y: 0 },
-  topLeft: { x: -RADIUS * 0.7, y: -RADIUS * 0.7 },
-};
-const OTHER_ACTION_SLOT_ORDER = ["right", "topRight", "topLeft", "bottomRight", "bottomLeft"];
+
+/**
+ * Position offsets (relative to the unit's center) for N action-bar
+ * buttons, matching the mobile reskin's own geometry - the whole
+ * arrangement adapts to how many buttons there are, not a fixed per-role
+ * slot:
+ *   1 button:  straight above
+ *   2 buttons: above and below
+ *   3 buttons: isosceles triangle - one above, two below
+ *   4 buttons: a cross - above, below, left, right
+ *   5 buttons: a regular pentagon, one vertex pointing straight up
+ * Index 0 is always "above" in every shape, for visual consistency as the
+ * count changes turn to turn. 6+ (never seen in this roster - see the
+ * comment where slots get built, below) falls back to a regular polygon
+ * with more vertices around the same circle, same idea as the pentagon.
+ */
+function getSlotPositions(n) {
+  if (n <= 0) return [];
+  if (n === 1) return [{ x: 0, y: -RADIUS }];
+  if (n === 2) {
+    return [
+      { x: 0, y: -RADIUS },
+      { x: 0, y: RADIUS },
+    ];
+  }
+  if (n === 3) {
+    return [
+      { x: 0, y: -RADIUS },
+      { x: -RADIUS * 0.75, y: RADIUS * 0.65 },
+      { x: RADIUS * 0.75, y: RADIUS * 0.65 },
+    ];
+  }
+  if (n === 4) {
+    return [
+      { x: 0, y: -RADIUS },
+      { x: RADIUS, y: 0 },
+      { x: 0, y: RADIUS },
+      { x: -RADIUS, y: 0 },
+    ];
+  }
+  // 5 or more: regular n-gon, one vertex pointing straight up (angle -90°),
+  // going clockwise.
+  return Array.from({ length: n }, (_, i) => {
+    const angle = -Math.PI / 2 + (i * 2 * Math.PI) / n;
+    return { x: RADIUS * Math.cos(angle), y: RADIUS * Math.sin(angle) };
+  });
+}
+
+// Index 0 (always "above") is standby, since that's the one button present
+// no matter what else is available (matches the 1-button case exactly) -
+// move/cancel and every otherAction fill the remaining positions in this
+// order. An audit across every unit in this roster, standing on every tile
+// type that could plausibly apply, found at most 3 simultaneous
+// otherActions (attack + heal + occupy, for one specific unit on an
+// uncaptured village next to both an enemy and a hurt ally) - i.e. 5
+// buttons total (standby + move/cancel + 3 otherActions) in the single
+// worst case found, which the pentagon shape above already covers exactly.
 
 /**
  * The contextual icon bar shown once a unit has confirmed its position
- * (moved, or chose to stay put) — positions icons in compass slots around
- * the unit itself instead of the original's centered bottom row.
+ * (moved, or chose to stay put) — positions icons around the unit itself
+ * instead of the original's centered bottom row, in a shape that changes
+ * with the button count (see getSlotPositions above).
  */
 export function showActionBar(scene, unit, x, y) {
   clearActionBar(scene);
@@ -300,17 +360,17 @@ export function showActionBar(scene, unit, x, y) {
     });
   }
 
-  const slots = [];
-  if (otherActions.length === 0) {
-    // Nothing to actually choose between — standby is the only real action, so
-    // there's no point offering "move" as a reconsideration alongside it.
-    slots.push({ slot: "top", frame: ACTION_ICON.STANDBY, onClick: () => finishUnitAction(scene, unit) });
-  } else {
-    slots.push({ slot: "left", frame: STAT_ICON.MOVE, onClick: () => handleActionBarCancelClick(scene) });
-    otherActions.forEach((action, i) => {
-      slots.push({ ...action, slot: OTHER_ACTION_SLOT_ORDER[i] ?? "right" });
-    });
-    slots.push({ slot: "top", frame: ACTION_ICON.STANDBY, onClick: () => finishUnitAction(scene, unit) });
+  // Standby first (always index 0 = "above" in getSlotPositions, for
+  // consistency with the 1-button case), then move/cancel, then whatever
+  // otherActions apply, in their own priority order (attack, summon, heal,
+  // support, occupy, repair, buy) - see getSlotPositions above for how
+  // this list's length maps to an actual shape.
+  const slots = [{ frame: ACTION_ICON.STANDBY, onClick: () => finishUnitAction(scene, unit) }];
+  if (otherActions.length > 0) {
+    // Nothing to actually choose between when there's nothing else - no
+    // point offering "move" as a reconsideration alongside standby alone.
+    slots.push({ frame: STAT_ICON.MOVE, onClick: () => handleActionBarCancelClick(scene) });
+    slots.push(...otherActions);
   }
 
   const cx = unit.x * TILE_SIZE + TILE_SIZE / 2;
@@ -330,8 +390,9 @@ export function showActionBar(scene, unit, x, y) {
   scene.actionBarContainer = scene.add.container(0, 0);
   scene.actionBarContainer.setDepth(DEPTH.ACTION_BAR);
 
-  slots.forEach(({ slot, frame, onClick }, i) => {
-    const offset = SLOT_OFFSET[slot];
+  const positions = getSlotPositions(slots.length);
+  slots.forEach(({ frame, onClick }, i) => {
+    const offset = positions[i];
     const targetX = Math.max(viewLeft, Math.min(viewRight, cx + offset.x));
     const targetY = Math.max(viewTop, Math.min(viewBottom, cy + offset.y));
 

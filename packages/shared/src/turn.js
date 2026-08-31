@@ -412,16 +412,19 @@ function tickStatus(unit, tile) {
  * PositionGenerator#createPositionsWithinRange(x, y, 0, 2). Mutates the
  * affected units' .status/.currentHp in place.
  *
- * @returns {{destroyedUnitIds: string[]}} anyone REFRESH_AURA's heal-as-damage
- *   finished off - caller (GameState#standby) is responsible for removing
- *   them and running the team-destroy check, same convention as
- *   combat-resolution.js's resolveAttack/resolveHeal.
+ * @returns {{hpChanges: Array<{unitId, x, y, change}>, destroyedUnitIds: string[]}}
+ *   hpChanges is REFRESH_AURA's own heal/heal-as-damage, for the caller to
+ *   animate (see the comment on hpChanges.push below). destroyedUnitIds is
+ *   anyone that heal-as-damage finished off - caller (GameState#standby) is
+ *   responsible for removing them and running the team-destroy check, same
+ *   convention as combat-resolution.js's resolveAttack/resolveHeal.
  */
 export function applyAuraEffects(game, rule, units, unit) {
   const hasAnyAura =
     hasAbility(unit, ABILITY.ATTACK_AURA) || hasAbility(unit, ABILITY.SLOWING_AURA) || hasAbility(unit, ABILITY.REFRESH_AURA);
-  if (!hasAnyAura) return { destroyedUnitIds: [] };
+  if (!hasAnyAura) return { hpChanges: [], destroyedUnitIds: [] };
 
+  const hpChanges = [];
   const destroyedUnitIds = [];
   for (const target of units) {
     if (target.id === unit.id || manhattanRange(unit, target) > 2) continue;
@@ -440,6 +443,16 @@ export function applyAuraEffects(game, rule, units, unit) {
       if (canRefresh(game, unit, target)) {
         const heal = getRefresherHeal(rule, unit, target);
         target.currentHp += heal;
+        // Same {unitId, x, y, change} shape combat-resolution.js's
+        // resolveAttack/resolveHeal and this file's own nextTurn use for
+        // their own hpChanges - callers pass this straight to
+        // render/hpChange.js's animateHpChanges, same as those. Without
+        // this, REFRESH_AURA's heal (or its heal-as-damage against a
+        // caught UNDEAD enemy) happened silently: currentHp changed, but
+        // nothing ever told the client there was anything to animate -
+        // the healed/damaged unit's HP bar would just jump on the next
+        // full refresh, with no floating number or bar animation at all.
+        hpChanges.push({ unitId: target.id, x: target.x, y: target.y, change: heal });
         if (target.currentHp <= 0) {
           target.currentHp = 0;
           if (!destroyedUnitIds.includes(target.id)) destroyedUnitIds.push(target.id);
@@ -447,7 +460,7 @@ export function applyAuraEffects(game, rule, units, unit) {
       }
     }
   }
-  return { destroyedUnitIds };
+  return { hpChanges, destroyedUnitIds };
 }
 
 /**

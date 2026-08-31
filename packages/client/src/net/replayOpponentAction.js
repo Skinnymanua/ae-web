@@ -14,11 +14,15 @@
  * and the spark/shake effect still needs to know where it used to be.
  *
  * Not every action type has special handling here - support, summon,
- * occupy, repair, and standby fall through to a plain refresh, because none
- * of THOSE have an elaborate animation for the acting player either (see
+ * occupy, and repair fall through to a plain refresh, because none of
+ * THOSE have an elaborate animation for the acting player either (see
  * their own confirm-functions and onClick handlers in input/boardInput.js
  * and ui/actionBar.js) - a plain refresh already matches what the acting
- * player themselves would have seen.
+ * player themselves would have seen. standby is usually the same (also no
+ * elaborate animation locally) - EXCEPT when the standing-by unit itself
+ * carries REFRESH_AURA and actually healed or hit something nearby, which
+ * does get an hp-change animation, matching ui/actionBar.js's own
+ * finishUnitAction.
  */
 import { TILE_SIZE, BOARD_OFFSET_Y } from "../constants.js";
 import { refreshUnits, animateUnitMove } from "../render/units.js";
@@ -113,6 +117,15 @@ export function replayOpponentAction(scene, msg, previousGameState) {
   if (actionType === "endTurn" && Array.isArray(result?.hpChanges) && result.hpChanges.length > 0) {
     // Self-sufficient already - turn.js's own hpChanges entries carry
     // {unitId, x, y, change} directly, no previousGameState lookup needed.
+    animateHpChanges(scene, result.hpChanges, () => finishReplay(scene));
+    return;
+  }
+
+  if (actionType === "standby" && Array.isArray(result?.hpChanges) && result.hpChanges.length > 0) {
+    // Empty unless the standing-by unit itself carries REFRESH_AURA and
+    // actually healed (or hit) something nearby - see GameState#standby's
+    // own comment. Same shape as endTurn's own hpChanges, self-sufficient
+    // for the same reason.
     animateHpChanges(scene, result.hpChanges, () => finishReplay(scene));
     return;
   }

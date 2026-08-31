@@ -450,13 +450,13 @@ export class GameState {
    */
   standby(unitId) {
     const unit = this.getUnit(unitId);
-    if (!unit) return;
+    if (!unit) return { hpChanges: [] };
     unit.standby = true;
 
     const maxHp = getMaxHp(unit);
     if (unit.currentHp > maxHp) unit.currentHp = maxHp;
 
-    const { destroyedUnitIds } = applyAuraEffects(this, this.rule, this.units, unit);
+    const { hpChanges, destroyedUnitIds } = applyAuraEffects(this, this.rule, this.units, unit);
     applyTombHazard(this, unit);
 
     if (destroyedUnitIds.length) {
@@ -475,6 +475,14 @@ export class GameState {
       }
       this._syncTileRefs();
     }
+
+    // hpChanges is empty unless the standing-by unit itself carries
+    // REFRESH_AURA and something nearby was actually healed/hit by it (see
+    // applyAuraEffects) - same {unitId, x, y, change} shape as
+    // endTurn/attack/heal's own hpChanges, for the caller to animate the
+    // same way (see ui/actionBar.js's finishUnitAction and
+    // net/replayOpponentAction.js's "standby" branch).
+    return { hpChanges };
   }
 
   /** Positions within summonerId's own attack range that currently hold an

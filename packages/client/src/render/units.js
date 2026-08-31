@@ -79,14 +79,21 @@ export function refreshUnits(scene) {
       });
     }
 
-    // Ported from android/assets/images/status.png - shown top-right of the
-    // tile (HP digits already own bottom-left, head overlay owns top-center)
-    // whenever the unit carries an active status. See STATUS_ICON_FRAME above
-    // for which badge maps to which of the four STATUS types.
+    // Ported from android/assets/images/status.png via
+    // CanvasRenderer#drawUnitWithInformation - the original draws this at
+    // (screen_x, screen_y + ts - sh), i.e. the SAME left edge as the HP
+    // digits above (screen_x, screen_y, no adjustment - confirmed against
+    // that already-correct port) with just a vertical offset toward the
+    // top, not the tile's right edge. This used to render top-RIGHT here -
+    // a genuine mismatch from the source, not a deliberate placement
+    // choice; there's also a separate level-up badge in the original,
+    // undrawn in this port so far, that DOES belong on the right (same Y as
+    // this, mirrored X - screen_x + ts - sw) - worth keeping in mind if
+    // that ever gets built, so the two don't collide.
     if (unit.status) {
       const iconFrame = STATUS_ICON_FRAME[unit.status.type];
       const iconSprite = scene.add.sprite(
-        topLeftX + TILE_SIZE - STATUS_ICON_SIZE / 2 - 2,
+        topLeftX + STATUS_ICON_SIZE / 2 + 2,
         topLeftY + STATUS_ICON_SIZE / 2 + 2,
         "status",
         iconFrame

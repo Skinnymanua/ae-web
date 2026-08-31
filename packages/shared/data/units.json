@@ -179,7 +179,12 @@
       "physicalDefence": 10,
       "magicDefence": 10,
       "movementPoint": 4,
-      "abilities": [],
+      "abilities": [
+        {
+          "id": 26,
+          "name": "BLINDER"
+         }
+       ],
       "growth": {
         "hp": 0,
         "attack": 10,
