@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { drawMenuPanel, addMenuButton } from "../ui/menuPanel.js";
 import {
   MAX_LEVEL_OPTIONS,
   STARTING_GOLD_OPTIONS,
@@ -9,6 +10,10 @@ import {
   DEFAULT_UNIT_CAPACITY,
   DEFAULT_PLAYER_COUNT,
 } from "./skirmishSettings.js";
+
+const PANEL_WIDTH = 320;
+const PANEL_HEIGHT = 220;
+const PANEL_PADDING = 20;
 
 /**
  * Settings submenu, split out of SkirmishSetupScene so map selection isn't
@@ -21,6 +26,15 @@ import {
  * submenu (see CreateGameScene, which shares this rather than duplicating
  * the three steppers again) - defaults to SkirmishSetupScene for backward
  * compatibility with the original local-skirmish flow.
+ *
+ * Styled with the same navy-panel treatment as MenuScene.js/
+ * SkirmishSetupScene.js (see ui/menuPanel.js) - reached from both the
+ * Skirmish and Multiplayer flows (via CreateGameScene), so restyling this
+ * one scene keeps both consistent. The steppers themselves keep their own
+ * "- value +" text controls rather than becoming beveled buttons - a
+ * different interaction (adjusting one of several bounded values in place)
+ * than a menu button's simple navigate-or-don't, same reasoning as
+ * SkirmishSetupScene's map list staying a plain row list.
  */
 export class SkirmishSettingsScene extends Phaser.Scene {
   constructor() {
@@ -42,11 +56,15 @@ export class SkirmishSettingsScene extends Phaser.Scene {
     this.add.rectangle(0, 0, width, height, 0x222222).setOrigin(0, 0);
 
     this.add
-      .text(width / 2, 24, "Game Settings", { fontSize: "24px", color: "#ffdd44", fontStyle: "bold" })
+      .text(width / 2, 24, "Game Settings", { fontSize: "26px", color: "#e8e8e8", fontStyle: "bold" })
       .setOrigin(0.5, 0);
 
-    const startX = width / 2 - 120;
-    const startY = 110;
+    const panelX = width / 2 - PANEL_WIDTH / 2;
+    const panelY = 90;
+    drawMenuPanel(this, panelX, panelY, PANEL_WIDTH, PANEL_HEIGHT);
+
+    const startX = panelX + PANEL_PADDING;
+    const startY = panelY + PANEL_PADDING + 8;
     this.createStepperRow(startX, startY, "Max Level", MAX_LEVEL_OPTIONS, this.maxLevelIndex, (i) => {
       this.maxLevelIndex = i;
     });
@@ -60,36 +78,34 @@ export class SkirmishSettingsScene extends Phaser.Scene {
       this.playerCountIndex = i;
     });
 
-    const backButton = this.add
-      .text(width / 2, height - 50, "[ Back ]", { fontSize: "18px", color: "#dd4444" })
-      .setOrigin(0.5)
-      .setInteractive();
-    backButton.on("pointerup", (pointer, localX, localY, event) => {
-      event.stopPropagation();
-      this.scene.start(this.returnScene, {
-        ...this.returnExtra,
-        selectedMapId: this.selectedMapId,
-        maxLevelIndex: this.maxLevelIndex,
-        startingGoldIndex: this.startingGoldIndex,
-        unitCapacityIndex: this.unitCapacityIndex,
-        playerCountIndex: this.playerCountIndex,
-      });
+    addMenuButton(this, width / 2 - 80, height - 60, 160, 42, {
+      label: "Back",
+      onClick: () => {
+        this.scene.start(this.returnScene, {
+          ...this.returnExtra,
+          selectedMapId: this.selectedMapId,
+          maxLevelIndex: this.maxLevelIndex,
+          startingGoldIndex: this.startingGoldIndex,
+          unitCapacityIndex: this.unitCapacityIndex,
+          playerCountIndex: this.playerCountIndex,
+        });
+      },
     });
   }
 
   /** Same "- value +" stepper as before - see skirmishSettings.js's own
    * comment on why these are bounded option sets rather than free text. */
   createStepperRow(x, y, label, options, initialIndex, onChange) {
-    this.add.text(x, y, label, { fontSize: "16px", color: "#ffffff" });
+    this.add.text(x, y, label, { fontSize: "15px", color: "#ffffff" });
 
-    const valueX = x + 180;
+    const valueX = x + PANEL_WIDTH - PANEL_PADDING * 2 - 40;
     const valueText = this.add
-      .text(valueX, y, String(options[initialIndex]), { fontSize: "16px", color: "#ffdd44" })
+      .text(valueX, y, String(options[initialIndex]), { fontSize: "15px", color: "#ffdd44" })
       .setOrigin(0.5, 0);
 
     let index = initialIndex;
-    const minus = this.add.text(valueX - 35, y, "-", { fontSize: "16px", color: "#dd4444" }).setInteractive();
-    const plus = this.add.text(valueX + 35, y, "+", { fontSize: "16px", color: "#44dd88" }).setInteractive();
+    const minus = this.add.text(valueX - 35, y, "-", { fontSize: "15px", color: "#dd4444" }).setInteractive();
+    const plus = this.add.text(valueX + 35, y, "+", { fontSize: "15px", color: "#44dd88" }).setInteractive();
 
     const update = () => {
       valueText.setText(String(options[index]));

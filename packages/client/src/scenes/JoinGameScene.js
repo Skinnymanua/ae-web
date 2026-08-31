@@ -2,12 +2,36 @@ import Phaser from "phaser";
 import { GameSocket } from "../net/socket.js";
 import { createTextInput } from "../ui/textInput.js";
 import { SERVER_WS_URL } from "../constants.js";
+import { drawMenuPanel, addMenuButton } from "../ui/menuPanel.js";
+import { createScrollList } from "../ui/scrollList.js";
+
+const PANEL_X = 24;
+const PANEL_Y = 90;
+const PANEL_WIDTH = 752;
+const PANEL_HEIGHT = 280;
+const PANEL_PADDING = 16;
+const ROW_HEIGHT = 30;
 
 /**
  * Session browser: connects, requests the open session list, and shows each
  * one with a lock icon if it's password-protected. Clicking a row either
  * joins directly (public) or reveals a password field + confirm (protected)
  * - see #selectSession/#confirmJoin.
+ *
+ * Styled with the same navy-panel treatment as the rest of this project's
+ * menus (see ui/menuPanel.js), and the session list is now the scrollable
+ * component (ui/scrollList.js) SkirmishSetupScene/CreateGameScene's map
+ * lists use, for the same reason: it can hold more rows than fit in the
+ * panel at once (open games, not just maps, so this one's list length is
+ * also just less predictable than either of those). A full session marks
+ * itself item.dimmed so it shows in the list (matching the original
+ * behavior) but can't actually be selected.
+ *
+ * The password prompt used to appear directly under the clicked row -
+ * that stopped making sense once rows can scroll: the row you clicked
+ * might scroll out of view while its own prompt stayed anchored to a
+ * position that no longer means anything. It now has its own fixed spot
+ * below the panel instead, independent of scroll position.
  */
 export class JoinGameScene extends Phaser.Scene {
   constructor() {
@@ -19,13 +43,15 @@ export class JoinGameScene extends Phaser.Scene {
     this.add.rectangle(0, 0, width, height, 0x222222).setOrigin(0, 0);
 
     this.add
-      .text(width / 2, 24, "Join Game", { fontSize: "24px", color: "#ffdd44", fontStyle: "bold" })
+      .text(width / 2, 24, "Join Game", { fontSize: "26px", color: "#e8e8e8", fontStyle: "bold" })
       .setOrigin(0.5, 0);
 
-    this.statusText = this.add.text(40, 70, "Connecting...", { fontSize: "14px", color: "#cccccc" });
-    this.rowTexts = [];
+    this.statusText = this.add.text(PANEL_X, 64, "Connecting...", { fontSize: "14px", color: "#cccccc" });
     this.passwordPromptElements = [];
     this.selectedSession = null;
+    this.sessionList = null;
+
+    drawMenuPanel(this, PANEL_X, PANEL_Y, PANEL_WIDTH, PANEL_HEIGHT);
 
     this.buildFooter();
     this.connectAndListSessions();
@@ -45,30 +71,44 @@ export class JoinGameScene extends Phaser.Scene {
   }
 
   renderSessionList(sessions) {
-    const startX = 40;
-    const startY = 100;
-    sessions.forEach((session, i) => {
-      const y = startY + i * 30;
-      const lock = session.hasPassword ? "🔒 " : "";
-      const label = `${lock}${session.name}  (${session.mapId}, ${session.connectedPlayerCount}/${session.maxPlayers})`;
-      const full = session.connectedPlayerCount >= session.maxPlayers;
-      const text = this.add.text(startX, y, label, {
-        fontSize: "15px",
-        color: full ? "#666677" : "#ffffff",
-      });
-      if (!full) {
-        text.setInteractive();
-        text.on("pointerup", (pointer, localX, localY, event) => {
-          event.stopPropagation();
-          this.selectSession(session);
-        });
-      }
-      this.rowTexts.push(text);
+    if (sessions.length === 0) return;
+
+    const listX = PANEL_X + PANEL_PADDING;
+    const listY = PANEL_Y + PANEL_PADDING;
+    const listWidth = PANEL_WIDTH - PANEL_PADDING * 2;
+    const listHeight = PANEL_HEIGHT - PANEL_PADDING * 2;
+
+    const wrapper = this.add.container(0, 0);
+
+    this.sessionList = createScrollList(this, {
+      parentContainer: wrapper,
+      parentX: 0,
+      parentY: 0,
+      x: listX,
+      y: listY,
+      width: listWidth,
+      height: listHeight,
+      rowHeight: ROW_HEIGHT,
+      items: sessions.map((session) => {
+        const lock = session.hasPassword ? "🔒 " : "";
+        const full = session.connectedPlayerCount >= session.maxPlayers;
+        return {
+          id: session.id,
+          label: `${lock}${session.name}  (${session.mapId}, ${session.connectedPlayerCount}/${session.maxPlayers})`,
+          dimmed: full,
+          session,
+        };
+      }),
+      onSelect: (item) => this.selectSession(item.session),
     });
+    // No explicit this.sessionList.destroy() needed - see
+    // SkirmishSetupScene.js's identical comment on why: this list lives for
+    // the whole duration of this scene, and Phaser tears its InputPlugin
+    // down automatically on scene shutdown.
   }
 
   /** Public session: joins immediately. Protected: reveals a password field
-   * + confirm button right under the row instead of joining right away. */
+   * + confirm button in the fixed prompt area below the panel. */
   selectSession(session) {
     this.clearPasswordPrompt();
     this.selectedSession = session;
@@ -78,19 +118,16 @@ export class JoinGameScene extends Phaser.Scene {
       return;
     }
 
-    const { width, height } = this.cameras.main;
-    const promptY = height - 130;
-    const label = this.add.text(40, promptY, `Password for "${session.name}"`, { fontSize: "14px", color: "#cccccc" });
-    const input = createTextInput(this, 40, promptY + 22, { placeholder: "password", password: true, width: 200 });
-    const confirm = this.add
-      .text(260, promptY + 22, "[ Join ]", { fontSize: "15px", color: "#44dd88" })
-      .setInteractive();
-    confirm.on("pointerup", (pointer, localX, localY, event) => {
-      event.stopPropagation();
-      this.confirmJoin(input.getValue());
+    const promptY = PANEL_Y + PANEL_HEIGHT + 20;
+    const label = this.add.text(PANEL_X, promptY, `Password for "${session.name}"`, { fontSize: "14px", color: "#cccccc" });
+    const input = createTextInput(this, PANEL_X, promptY + 22, { placeholder: "password", password: true, width: 200 });
+    const confirmButton = addMenuButton(this, PANEL_X + 220, promptY + 20, 100, 34, {
+      label: "Join",
+      fontSize: "14px",
+      onClick: () => this.confirmJoin(input.getValue()),
     });
     input.focus();
-    this.passwordPromptElements = [label, input, confirm];
+    this.passwordPromptElements = [label, input, confirmButton];
   }
 
   clearPasswordPrompt() {
@@ -125,14 +162,12 @@ export class JoinGameScene extends Phaser.Scene {
 
   buildFooter() {
     const { width, height } = this.cameras.main;
-    const backButton = this.add
-      .text(width / 2, height - 50, "[ Back ]", { fontSize: "18px", color: "#dd4444" })
-      .setOrigin(0.5)
-      .setInteractive();
-    backButton.on("pointerup", (pointer, localX, localY, event) => {
-      event.stopPropagation();
-      this.socket?.close();
-      this.scene.start("NetworkMenuScene");
+    addMenuButton(this, width / 2 - 80, height - 60, 160, 42, {
+      label: "Back",
+      onClick: () => {
+        this.socket?.close();
+        this.scene.start("NetworkMenuScene");
+      },
     });
   }
 }

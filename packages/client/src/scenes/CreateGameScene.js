@@ -3,6 +3,8 @@ import { MAPS } from "../maps/index.js";
 import { GameSocket } from "../net/socket.js";
 import { createTextInput } from "../ui/textInput.js";
 import { SERVER_WS_URL } from "../constants.js";
+import { drawMenuPanel, addMenuButton } from "../ui/menuPanel.js";
+import { createScrollList } from "../ui/scrollList.js";
 import {
   MAX_LEVEL_OPTIONS,
   STARTING_GOLD_OPTIONS,
@@ -14,6 +16,13 @@ import {
   DEFAULT_PLAYER_COUNT,
 } from "./skirmishSettings.js";
 
+const COLUMN_WIDTH = 360;
+const COLUMN_HEIGHT = 340;
+const COLUMN_Y = 64;
+const LEFT_COLUMN_X = 24;
+const RIGHT_COLUMN_X = 404;
+const COLUMN_PADDING = 16;
+
 /**
  * Networked game creation: same map + settings pattern as
  * SkirmishSetupScene/SkirmishSettingsScene (reuses the latter directly, see
@@ -21,11 +30,17 @@ import {
  * ui/textInput.js for why those specifically need a real HTML input rather
  * than another bounded stepper.
  *
- * On success, connects to the server, creates the session, and lands in a
- * simple "waiting for opponent" holding screen - NOT yet BoardScene itself,
- * since BoardScene doesn't have a networked mode to receive this into yet
- * (see the session_created handshake this scene completes; a later change
- * wires BoardScene up to actually consume it).
+ * On success, connects to the server, creates the session, and lands in
+ * NetworkLobbyScene to wait for the rest of the players.
+ *
+ * Styled with the same navy-panel treatment as MenuScene.js/
+ * SkirmishSetupScene.js (see ui/menuPanel.js) - reached from the main
+ * menu's Multiplayer submenu, so it should read as part of the same visual
+ * flow. Map list uses the same scrollable component as SkirmishSetupScene
+ * (ui/scrollList.js), for the same reason: it can grow past the panel's
+ * fixed height as more maps get added. Session name/password stay real
+ * HTML text inputs (ui/textInput.js), not beveled buttons - a different
+ * control entirely.
  */
 export class CreateGameScene extends Phaser.Scene {
   constructor() {
@@ -47,71 +62,84 @@ export class CreateGameScene extends Phaser.Scene {
     this.add.rectangle(0, 0, width, height, 0x222222).setOrigin(0, 0);
 
     this.add
-      .text(width / 2, 24, "Create Game", { fontSize: "24px", color: "#ffdd44", fontStyle: "bold" })
+      .text(width / 2, 24, "Create Game", { fontSize: "26px", color: "#e8e8e8", fontStyle: "bold" })
       .setOrigin(0.5, 0);
 
-    this.mapRowTexts = [];
-    this.buildMapList();
-    this.buildSettingsSummary();
-    this.buildSessionFields();
+    // Footer first - buildMapList's scroll list restores the previously
+    // selected map (if any) by calling select(), which fires onSelect and
+    // needs this.createButton to already exist to update its enabled state.
     this.buildFooter();
+    this.buildSettingsSummary();
+    this.buildMapList();
   }
 
   buildMapList() {
-    const startX = 40;
-    const startY = 90;
-    this.add.text(startX, startY - 26, "Select Map", { fontSize: "16px", color: "#cccccc" });
+    drawMenuPanel(this, LEFT_COLUMN_X, COLUMN_Y, COLUMN_WIDTH, COLUMN_HEIGHT);
+
+    const startX = LEFT_COLUMN_X + COLUMN_PADDING;
+    const labelY = COLUMN_Y + COLUMN_PADDING;
+    this.add.text(startX, labelY, "Select Map", { fontSize: "16px", color: "#cccccc" });
 
     if (MAPS.length === 0) {
-      this.add.text(startX, startY, "(no maps found in src/maps/)", { fontSize: "13px", color: "#888888" });
+      this.add.text(startX, labelY + 22, "(no maps found in src/maps/)", { fontSize: "13px", color: "#888888" });
       return;
     }
 
-    MAPS.forEach((map, i) => {
-      const y = startY + i * 26;
-      const label = `${map.name}  (${map.width}x${map.height}, ${map.unitCount} units)`;
-      const text = this.add.text(startX, y, label, { fontSize: "14px", color: "#ffffff" }).setInteractive();
-      text.on("pointerup", (pointer, localX, localY, event) => {
-        event.stopPropagation();
-        this.selectMap(map.id);
-      });
-      this.mapRowTexts.push({ id: map.id, text });
+    const listY = labelY + 26;
+    const listWidth = COLUMN_WIDTH - COLUMN_PADDING * 2;
+    const listHeight = COLUMN_Y + COLUMN_HEIGHT - COLUMN_PADDING - listY;
+    const rowHeight = 28;
+
+    const wrapper = this.add.container(0, 0);
+
+    this.mapList = createScrollList(this, {
+      parentContainer: wrapper,
+      parentX: 0,
+      parentY: 0,
+      x: startX,
+      y: listY,
+      width: listWidth,
+      height: listHeight,
+      rowHeight,
+      items: MAPS.map((map) => ({
+        id: map.id,
+        label: `${map.name}  (${map.width}x${map.height}, ${map.unitCount} units)`,
+      })),
+      onSelect: (item) => {
+        this.selectedMapId = item?.id ?? null;
+        this.createButton.setEnabled(!!this.selectedMapId);
+      },
     });
 
-    this.updateMapSelectionHighlight();
-  }
-
-  selectMap(id) {
-    this.selectedMapId = id;
-    this.updateMapSelectionHighlight();
-    this.updateCreateButtonState();
-  }
-
-  updateMapSelectionHighlight() {
-    for (const { id, text } of this.mapRowTexts) {
-      text.setColor(id === this.selectedMapId ? "#44dd88" : "#ffffff");
-    }
+    if (this.selectedMapId) this.mapList.select(this.selectedMapId);
+    // No explicit this.mapList.destroy() needed - see
+    // SkirmishSetupScene.js's identical comment on why: this list lives for
+    // the whole duration of this scene, and Phaser tears its InputPlugin
+    // down automatically on scene shutdown.
   }
 
   buildSettingsSummary() {
-    const startX = 420;
-    const startY = 90;
-    this.add.text(startX, startY - 26, "Game Settings", { fontSize: "16px", color: "#cccccc" });
+    drawMenuPanel(this, RIGHT_COLUMN_X, COLUMN_Y, COLUMN_WIDTH, COLUMN_HEIGHT);
 
-    this.settingsSummaryText = this.add.text(startX, startY, "", {
+    const startX = RIGHT_COLUMN_X + COLUMN_PADDING;
+    const labelY = COLUMN_Y + COLUMN_PADDING;
+    this.add.text(startX, labelY, "Game Settings", { fontSize: "16px", color: "#cccccc" });
+
+    this.settingsSummaryText = this.add.text(startX, labelY + 22, "", {
       fontSize: "14px",
       color: "#ffffff",
       lineSpacing: 10,
     });
     this.updateSettingsSummary();
 
-    const settingsButton = this.add
-      .text(startX, startY + 115, "[ Settings ]", { fontSize: "16px", color: "#44aaff" })
-      .setInteractive();
-    settingsButton.on("pointerup", (pointer, localX, localY, event) => {
-      event.stopPropagation();
-      this.openSettings();
+    const columnInnerWidth = COLUMN_WIDTH - COLUMN_PADDING * 2;
+    addMenuButton(this, startX, labelY + 130, columnInnerWidth, 36, {
+      label: "Settings",
+      fontSize: "14px",
+      onClick: () => this.openSettings(),
     });
+
+    this.buildSessionFields(startX, labelY + 182, columnInnerWidth);
   }
 
   updateSettingsSummary() {
@@ -139,50 +167,36 @@ export class CreateGameScene extends Phaser.Scene {
     });
   }
 
-  buildSessionFields() {
-    const startX = 420;
-    const startY = 260;
-    this.add.text(startX, startY - 20, "Session Name", { fontSize: "14px", color: "#cccccc" });
-    this.nameInput = createTextInput(this, startX, startY, { placeholder: "My Game" });
+  buildSessionFields(startX, startY, fieldWidth) {
+    this.nameInput = createTextInput(this, startX - 20 , startY + 182, { placeholder: "Session name", width: fieldWidth });
     this.nameInput.setValue(this.sessionNameValue);
 
-    this.add.text(startX, startY + 40, "Password (optional)", { fontSize: "14px", color: "#cccccc" });
-    this.passwordInput = createTextInput(this, startX, startY + 60, { placeholder: "leave blank for public", password: true });
+    this.passwordInput = createTextInput(this, startX - 20 , startY + 220, {
+      placeholder: "Password (optional)",
+      password: true,
+      width: fieldWidth,
+    });
     this.passwordInput.setValue(this.passwordValue);
   }
 
   buildFooter() {
     const { width, height } = this.cameras.main;
+    const buttonWidth = 160;
+    const buttonHeight = 42;
+    const gap = 16;
 
-    this.statusText = this.add.text(width / 2, height - 80, "", { fontSize: "13px", color: "#ff8888" }).setOrigin(0.5);
+    this.statusText = this.add.text(width / 2, height - 92, "", { fontSize: "13px", color: "#ff8888" }).setOrigin(0.5);
 
-    this.createButton = this.add
-      .text(width / 2 - 80, height - 50, "[ Create ]", { fontSize: "18px", color: "#44dd88" })
-      .setInteractive();
-    this.createButton.on("pointerup", (pointer, localX, localY, event) => {
-      event.stopPropagation();
-      this.createGame();
+    this.createButton = addMenuButton(this, width / 2 - buttonWidth - gap / 2, height - 60, buttonWidth, buttonHeight, {
+      label: "Create",
+      enabled: !!this.selectedMapId,
+      onClick: () => this.createGame(),
     });
 
-    const backButton = this.add
-      .text(width / 2 + 80, height - 50, "[ Back ]", { fontSize: "18px", color: "#dd4444" })
-      .setInteractive();
-    backButton.on("pointerup", (pointer, localX, localY, event) => {
-      event.stopPropagation();
-      this.scene.start("NetworkMenuScene");
+    addMenuButton(this, width / 2 + gap / 2, height - 60, buttonWidth, buttonHeight, {
+      label: "Back",
+      onClick: () => this.scene.start("NetworkMenuScene"),
     });
-
-    this.updateCreateButtonState();
-  }
-
-  updateCreateButtonState() {
-    if (this.selectedMapId) {
-      this.createButton.setColor("#44dd88");
-      this.createButton.setInteractive();
-    } else {
-      this.createButton.setColor("#666677");
-      this.createButton.disableInteractive();
-    }
   }
 
   async createGame() {
@@ -193,7 +207,7 @@ export class CreateGameScene extends Phaser.Scene {
     this.sessionNameValue = this.nameInput.getValue();
     this.passwordValue = this.passwordInput.getValue();
 
-    this.createButton.disableInteractive();
+    this.createButton.setEnabled(false);
     this.statusText.setColor("#ffdd44");
     this.statusText.setText("Connecting...");
 
@@ -218,7 +232,7 @@ export class CreateGameScene extends Phaser.Scene {
     } catch (err) {
       this.statusText.setColor("#ff4444");
       this.statusText.setText("Failed to create game - is the server running?");
-      this.createButton.setInteractive();
+      this.createButton.setEnabled(true);
       socket.close();
     }
   }

@@ -1,5 +1,8 @@
 import Phaser from "phaser";
 import { TEAM_COLOR } from "../constants.js";
+import { drawMenuPanel, addMenuButton } from "../ui/menuPanel.js";
+
+const PANEL_WIDTH = 340;
 
 /**
  * Holding screen after creating or joining a networked session - shows who's
@@ -9,6 +12,11 @@ import { TEAM_COLOR } from "../constants.js";
  * which broadcasts game_started back to BOTH sockets (see
  * server/src/index.js), so both clients transition into BoardScene
  * together regardless of who clicked it.
+ *
+ * Styled with the same navy-panel treatment as the rest of this project's
+ * menus (see ui/menuPanel.js) - reached from both CreateGameScene and
+ * JoinGameScene, so it should read as part of the same visual flow either
+ * way you got here.
  */
 export class NetworkLobbyScene extends Phaser.Scene {
   constructor() {
@@ -27,13 +35,18 @@ export class NetworkLobbyScene extends Phaser.Scene {
     this.add.rectangle(0, 0, width, height, 0x222222).setOrigin(0, 0);
 
     this.add
-      .text(width / 2, 40, this.session.name, { fontSize: "24px", color: "#ffdd44", fontStyle: "bold" })
+      .text(width / 2, 40, this.session.name, { fontSize: "26px", color: "#e8e8e8", fontStyle: "bold" })
+      .setOrigin(0.5);
+
+    const panelX = width / 2 - PANEL_WIDTH / 2;
+    const panelY = 90;
+    drawMenuPanel(this, panelX, panelY, PANEL_WIDTH, 130);
+
+    this.add
+      .text(width / 2, panelY + 24, `Map: ${this.session.mapId}`, { fontSize: "14px", color: "#cccccc" })
       .setOrigin(0.5);
     this.add
-      .text(width / 2, 75, `Map: ${this.session.mapId}`, { fontSize: "14px", color: "#cccccc" })
-      .setOrigin(0.5);
-    this.add
-      .text(width / 2, 100, `You are Team ${this.team}`, {
+      .text(width / 2, panelY + 48, `You are Team ${this.team}`, {
         fontSize: "16px",
         // Same 4-color palette the bottom bar uses (see constants.js's
         // TEAM_COLOR) instead of a hardcoded blue/orange binary choice -
@@ -43,15 +56,12 @@ export class NetworkLobbyScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    this.statusText = this.add.text(width / 2, height * 0.45, "", { fontSize: "16px", color: "#44dd88" }).setOrigin(0.5);
+    this.statusText = this.add.text(width / 2, panelY + 90, "", { fontSize: "14px", color: "#44dd88" }).setOrigin(0.5);
 
-    this.startButton = this.add
-      .text(width / 2, height * 0.6, "[ Start Game ]", { fontSize: "20px", color: "#44dd88" })
-      .setOrigin(0.5)
-      .setInteractive();
-    this.startButton.on("pointerup", (pointer, localX, localY, event) => {
-      event.stopPropagation();
-      this.socket.send("start_game");
+    this.startButton = addMenuButton(this, width / 2 - 90, panelY + 160, 180, 44, {
+      label: "Start Game",
+      enabled: false,
+      onClick: () => this.socket.send("start_game"),
     });
 
     this.updateStatus(this.session.connectedPlayerCount);
@@ -71,13 +81,9 @@ export class NetworkLobbyScene extends Phaser.Scene {
     // the session, sender included.
     this.unsubStarted = this.socket.on("game_started", () => this.startGame());
 
-    const leaveButton = this.add
-      .text(width / 2, height - 50, "[ Leave ]", { fontSize: "18px", color: "#dd4444" })
-      .setOrigin(0.5)
-      .setInteractive();
-    leaveButton.on("pointerup", (pointer, localX, localY, event) => {
-      event.stopPropagation();
-      this.leave();
+    addMenuButton(this, width / 2 - 80, height - 60, 160, 42, {
+      label: "Leave",
+      onClick: () => this.leave(),
     });
 
     this.events.on("shutdown", () => this.cleanupListeners());
@@ -96,13 +102,7 @@ export class NetworkLobbyScene extends Phaser.Scene {
     // socket registered for it, so nothing could ever act on its behalf) -
     // matching the same disabled-until-valid pattern SkirmishSetupScene's
     // own Start button uses for "no map selected yet".
-    if (playerCount >= maxPlayers) {
-      this.startButton.setColor("#44dd88");
-      this.startButton.setInteractive();
-    } else {
-      this.startButton.setColor("#666677");
-      this.startButton.disableInteractive();
-    }
+    this.startButton.setEnabled(playerCount >= maxPlayers);
   }
 
   cleanupListeners() {

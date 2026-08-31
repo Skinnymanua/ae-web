@@ -1,17 +1,6 @@
 import Phaser from "phaser";
 import { MENU_WIDTH, MENU_HEIGHT } from "../constants.js";
-
-// Colors sampled directly from a real screenshot of the mobile reskin's own
-// main menu (navy panel, mid-grey beveled buttons) - see the button-row
-// helper below for how the bevel itself is approximated (plain Graphics
-// rects, since there's no matching 9-slice asset in this repo for this
-// specific panel style - ui/dialogs.js's "border" texture is a different,
-// thinner corner-bracket look, sampled and rejected as a mismatch for this).
-const PANEL_BG = 0x242b47;
-const PANEL_BORDER = 0x4a5a8f;
-const BUTTON_BG = 0x5e5e5e;
-const BUTTON_BG_DISABLED = 0x3a3a3a;
-const BUTTON_HIGHLIGHT = 0x8a8a8a;
+import { drawMenuPanel, addMenuButton } from "../ui/menuPanel.js";
 
 const PANEL_WIDTH = 300;
 const ROW_HEIGHT = 42;
@@ -20,7 +9,8 @@ const ROW_PADDING = 16;
 
 /**
  * Entry point scene - styled after the mobile reskin's own main menu (see
- * the screenshot this was built from). Shows the full button list from that
+ * ui/menuPanel.js for the shared navy-panel + beveled-button styling this
+ * was originally built from). Shows the full button list from that
  * reference for recognizability, but only Skirmish and Multiplayer actually
  * go anywhere - Campaign, Load Game, Tools, and Account aren't built (see
  * the project-wide gap summary: no AI/campaign mode, no save/load, no
@@ -80,49 +70,17 @@ export class MenuScene extends Phaser.Scene {
     const panelX = width / 2 - PANEL_WIDTH / 2;
     const panelY = height * 0.32;
 
-    const g = this.add.graphics();
-    g.fillStyle(PANEL_BG, 1);
-    g.fillRoundedRect(panelX, panelY, PANEL_WIDTH, panelHeight, 6);
-    g.lineStyle(2, PANEL_BORDER, 1);
-    g.strokeRoundedRect(panelX, panelY, PANEL_WIDTH, panelHeight, 6);
+    drawMenuPanel(this, panelX, panelY, PANEL_WIDTH, panelHeight);
 
     entries.forEach((entry, i) => {
       const rowX = panelX + ROW_PADDING;
       const rowY = panelY + ROW_PADDING + i * (ROW_HEIGHT + ROW_GAP);
       const rowWidth = PANEL_WIDTH - ROW_PADDING * 2;
-      this.addMenuButton(rowX, rowY, rowWidth, entry);
+      addMenuButton(this, rowX, rowY, rowWidth, ROW_HEIGHT, {
+        label: entry.label,
+        enabled: entry.enabled,
+        onClick: entry.target ? () => this.scene.start(entry.target) : undefined,
+      });
     });
-  }
-
-  /** One beveled button row - a plain filled rect with a lighter top/left
-   * edge to fake a raised look (no bevel/gradient asset available for this
-   * specific style), white bold text when enabled, dimmed and
-   * non-interactive when not. */
-  addMenuButton(x, y, w, { label, enabled, target }) {
-    const g = this.add.graphics();
-    g.fillStyle(enabled ? BUTTON_BG : BUTTON_BG_DISABLED, 1);
-    g.fillRoundedRect(x, y, w, ROW_HEIGHT, 4);
-    if (enabled) {
-      g.lineStyle(1, BUTTON_HIGHLIGHT, 0.6);
-      g.strokeRoundedRect(x, y, w, ROW_HEIGHT, 4);
-    }
-
-    const text = this.add
-      .text(x + w / 2, y + ROW_HEIGHT / 2, label, {
-        fontSize: "17px",
-        color: enabled ? "#ffffff" : "#777777",
-        fontStyle: "bold",
-      })
-      .setOrigin(0.5);
-
-    if (!enabled) return;
-
-    // A generous invisible hit zone over the whole row (not just the text
-    // glyphs) - matches how every other button in this project's menus
-    // works, since a Phaser Text object's own hit area is exactly its
-    // rendered text bounds otherwise, which reads as a much smaller and
-    // less forgiving click target than the visible button row.
-    const hitZone = this.add.zone(x, y, w, ROW_HEIGHT).setOrigin(0, 0).setInteractive();
-    hitZone.on("pointerup", () => this.scene.start(target));
   }
 }
