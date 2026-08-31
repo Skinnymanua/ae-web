@@ -56,6 +56,13 @@ export class SkirmishSetupScene extends Phaser.Scene {
     this.startingGoldIndex = data?.startingGoldIndex ?? STARTING_GOLD_OPTIONS.indexOf(DEFAULT_STARTING_GOLD);
     this.unitCapacityIndex = data?.unitCapacityIndex ?? UNIT_CAPACITY_OPTIONS.indexOf(DEFAULT_UNIT_CAPACITY);
     this.playerCountIndex = data?.playerCountIndex ?? PLAYER_COUNT_OPTIONS.indexOf(DEFAULT_PLAYER_COUNT);
+    // Per-team Player/Robot/None + alliance config from GameSettingScene -
+    // see #openGameSetting/#startGame below. Undefined (not yet visited)
+    // until the player opens that screen at least once; startGame falls
+    // back to "everyone human, own alliance" (the original hardcoded
+    // behavior) if they never do.
+    this.playerTypeIndices = data?.playerTypeIndices;
+    this.allianceIndices = data?.allianceIndices;
   }
 
   create() {
@@ -149,6 +156,12 @@ export class SkirmishSetupScene extends Phaser.Scene {
       fontSize: "15px",
       onClick: () => this.openSettings(),
     });
+
+    addMenuButton(this, startX, startY + 164, COLUMN_WIDTH - COLUMN_PADDING * 2, 40, {
+      label: "Game Setting",
+      fontSize: "15px",
+      onClick: () => this.openGameSetting(),
+    });
   }
 
   updateSettingsSummary() {
@@ -168,6 +181,19 @@ export class SkirmishSetupScene extends Phaser.Scene {
       startingGoldIndex: this.startingGoldIndex,
       unitCapacityIndex: this.unitCapacityIndex,
       playerCountIndex: this.playerCountIndex,
+    });
+  }
+
+  openGameSetting() {
+    this.scene.start("GameSettingScene", {
+      selectedMapId: this.selectedMapId,
+      maxLevelIndex: this.maxLevelIndex,
+      startingGoldIndex: this.startingGoldIndex,
+      unitCapacityIndex: this.unitCapacityIndex,
+      playerCountIndex: this.playerCountIndex,
+      playerCount: PLAYER_COUNT_OPTIONS[this.playerCountIndex],
+      playerTypeIndices: this.playerTypeIndices,
+      allianceIndices: this.allianceIndices,
     });
   }
 
@@ -199,6 +225,11 @@ export class SkirmishSetupScene extends Phaser.Scene {
       startingGold: STARTING_GOLD_OPTIONS[this.startingGoldIndex],
       unitCapacity: UNIT_CAPACITY_OPTIONS[this.unitCapacityIndex],
       playerCount: PLAYER_COUNT_OPTIONS[this.playerCountIndex],
+      // From GameSettingScene, if the player ever opened it - see
+      // BoardScene#init for the "everyone human, own alliance" fallback
+      // when these are undefined (never visited that screen).
+      playerTypeIndices: this.playerTypeIndices,
+      allianceIndices: this.allianceIndices,
     });
   }
 }

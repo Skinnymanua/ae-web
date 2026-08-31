@@ -1,13 +1,15 @@
 import Phaser from "phaser";
 import { GameState } from "@ae/shared/src/game-state.js";
-import { getWinnerAlliance } from "@ae/shared/src/turn.js";
+import { getWinnerAlliance, PLAYER_TYPE } from "@ae/shared/src/turn.js";
 import unitsData from "@ae/shared/data/units.json";
 import tilesData from "@ae/shared/data/tiles.json";
 import { MAPS } from "../maps/index.js";
+import { PLAYER_TYPE_OPTIONS, ALLIANCE_OPTIONS } from "./skirmishSettings.js";
 import { TILE_SIZE, BOARD_OFFSET_Y } from "../constants.js";
 import { BOTTOM_BAR_HEIGHT } from "../ui/bottomBar.js";
 import { deserializeGameState } from "../net/deserializeGameState.js";
 import { setupNetworkedGameSync } from "../net/runGameAction.js";
+import { runPendingRobotTurns } from "../net/robotDriver.js";
 import { replayOpponentAction } from "../net/replayOpponentAction.js";
 import { clearActiveSession } from "../net/sessionPersistence.js";
 
@@ -48,6 +50,12 @@ export class BoardScene extends Phaser.Scene {
       this.startingGold_ = data?.startingGold ?? 300;
       this.unitCapacity_ = data?.unitCapacity ?? 15; // POPULATION_PRESET[0]
       this.playerCount_ = data?.playerCount ?? 2;
+      // From GameSettingScene, if the player ever visited it - see the
+      // players array built in create() below. Undefined (never visited)
+      // falls back to the original hardcoded behavior: every slot is a
+      // human (PLAYER_TYPE.LOCAL) on its own separate alliance.
+      this.playerTypeIndices_ = data?.playerTypeIndices;
+      this.allianceIndices_ = data?.allianceIndices;
     }
   }
 
@@ -215,14 +223,16 @@ export class BoardScene extends Phaser.Scene {
         mapData: this.mapData_,
         unitDefs: unitsData.units,
         tileDefs: tilesData.tiles,
-        // One player per team, own alliance each - same convention
-        // server/src/sessions.js's createSession uses for networked
-        // sessions, generalized here to however many players local
-        // skirmish was set up for (was hardcoded to exactly 2).
+        // One player per team, own alliance each unless GameSettingScene
+        // set something else - see this.playerTypeIndices_/allianceIndices_
+        // above and skirmishSettings.js's PLAYER_TYPE_OPTIONS/ALLIANCE_OPTIONS
+        // for what those indices map to. A "None" team still gets a players[]
+        // entry (turn.js's isTeamAlive already treats PLAYER_TYPE.NONE as not
+        // alive, same as it always has for any team slot beyond playerCount_).
         players: Array.from({ length: this.playerCount_ }, (_, team) => ({
           team,
-          type: 1,
-          alliance: team,
+          type: this.playerTypeIndices_ ? PLAYER_TYPE_OPTIONS[this.playerTypeIndices_[team]].value : PLAYER_TYPE.LOCAL,
+          alliance: this.allianceIndices_ ? ALLIANCE_OPTIONS[this.allianceIndices_[team]] - 1 : team,
           gold: this.startingGold_,
         })),
         rule: { maxLevel: this.maxLevel_, unitCapacity: this.unitCapacity_ },
@@ -270,6 +280,14 @@ export class BoardScene extends Phaser.Scene {
     createHud(this);
     createStatsPanel(this);
     setupCameraDrag(this);
+
+    // Covers only the (unusual, but GameSettingScene does allow it) case
+    // where team 0 itself is a Robot - runPendingRobotTurns is a no-op for
+    // everyone else (see isRobotControlledTurn: false whenever
+    // this.networked_ or the current team isn't PLAYER_TYPE.AI). Fired and
+    // forgotten rather than awaited - nothing here needs to block on it,
+    // same as the End Turn handler's own call in ui/bottomBar.js.
+    if (!this.networked_) runPendingRobotTurns(this);
   }
 
   /**

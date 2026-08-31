@@ -22,7 +22,7 @@
  */
 import { deserializeGameState } from "./deserializeGameState.js";
 
-const ACTION_PARAM_KEYS = {
+export const ACTION_PARAM_KEYS = {
   moveUnit: ["unitId", "path"],
   attack: ["attackerId", "defenderId"],
   heal: ["healerId", "targetId"],

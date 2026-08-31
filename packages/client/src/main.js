@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { MenuScene } from "./scenes/MenuScene.js";
 import { SkirmishSetupScene } from "./scenes/SkirmishSetupScene.js";
 import { SkirmishSettingsScene } from "./scenes/SkirmishSettingsScene.js";
+import { GameSettingScene } from "./scenes/GameSettingScene.js";
 import { NetworkMenuScene } from "./scenes/NetworkMenuScene.js";
 import { CreateGameScene } from "./scenes/CreateGameScene.js";
 import { JoinGameScene } from "./scenes/JoinGameScene.js";
@@ -34,6 +35,7 @@ new Phaser.Game({
     MenuScene,
     SkirmishSetupScene,
     SkirmishSettingsScene,
+    GameSettingScene,
     NetworkMenuScene,
     CreateGameScene,
     JoinGameScene,

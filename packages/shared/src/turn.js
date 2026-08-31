@@ -74,7 +74,7 @@ export function applyTombHazard(game, unit) {
   }
 }
 
-export const PLAYER_TYPE = { NONE: 0 }; // extend as needed (LOCAL/AI/NETWORK etc.) — original had more, add when the lobby/player system is built
+export const PLAYER_TYPE = { NONE: 0, LOCAL: 1, AI: 2 }; // extend with NETWORK etc. if a networked-vs-AI mode is ever built
 
 // --- Alliance / enmity -------------------------------------------------
 

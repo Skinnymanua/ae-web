@@ -22,6 +22,7 @@ import { refreshUnits } from "../render/units.js";
 import { refreshStatsPanel } from "./statsPanel.js";
 import { animateHpChanges } from "../render/hpChange.js";
 import { runGameAction } from "../net/runGameAction.js";
+import { runPendingRobotTurns } from "../net/robotDriver.js";
 
 export const BOTTOM_BAR_HEIGHT = 44;
 const BAR_HEIGHT = BOTTOM_BAR_HEIGHT;
@@ -61,14 +62,19 @@ export function createBottomBar(scene) {
     showConfirm(scene, "End your turn?", async () => {
       scene.animating = true;
       const result = await runGameAction(scene, "endTurn");
-      scene.animating = false;
       scene.selectedUnitId = null;
       clearHighlights(scene);
       updateBottomBarEconomy(scene);
       refreshTombs(scene); // a new round may have just decayed/removed tombs (turn.js's updateTombs)
-      animateHpChanges(scene, result.hpChanges, () => {
+      animateHpChanges(scene, result.hpChanges, async () => {
         refreshUnits(scene);
         refreshStatsPanel(scene);
+        // Hands off to whichever Robot team(s) come next, if any - a no-op
+        // (returns immediately) if the team we just moved to is human. See
+        // net/robotDriver.js's own docstring for why this loops rather
+        // than playing just one team's turn.
+        await runPendingRobotTurns(scene);
+        scene.animating = false;
       });
     });
   });
