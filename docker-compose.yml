@@ -1,0 +1,47 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    volumes:
+      - sessions:/data/sessions
+    restart: unless-stopped
+    # No ports published here on purpose - only reachable through nginx's
+    # /ws proxy inside the client container (see nginx.conf), not directly
+    # from outside.
+
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+      args:
+        # Must match nginx.conf's server_name / the domain you run
+        # init-letsencrypt.sh against. wss:// (not ws://) since nginx now
+        # terminates TLS on 443 - see nginx.conf's /ws location.
+        VITE_SERVER_WS_URL: ${VITE_SERVER_WS_URL:-wss://YOUR_DOMAIN_HERE/ws}
+    ports:
+      - "80:80"    # ACME challenge + redirect to https (see nginx.conf)
+      - "443:443"
+    volumes:
+      - certbot-etc:/etc/letsencrypt
+      - webroot:/var/www/certbot
+    depends_on:
+      - server
+    restart: unless-stopped
+
+  # Renews the cert automatically (Let's Encrypt certs last 90 days; this
+  # checks twice a day and only actually renews once it's within its last
+  # 30). Does NOT reload nginx after a renewal by itself - see the note in
+  # init-letsencrypt.sh / the README section below on reloading periodically.
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - certbot-etc:/etc/letsencrypt
+      - webroot:/var/www/certbot
+    entrypoint: >
+      /bin/sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot; sleep 12h & wait $${!}; done;"
+
+volumes:
+  sessions:
+  certbot-etc:
+  webroot:
