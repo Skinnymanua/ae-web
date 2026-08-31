@@ -9,7 +9,7 @@
  * Client -> server message types:
  *   { type: "list_sessions" }
  *   { type: "create_session", name, mapId, mapData, maxLevel, startingGold, unitCapacity, password?, maxPlayers? }  // maxPlayers clamped to [2,4], defaults to 2
- *   { type: "join_session", sessionId, password? }
+ *   { type: "join_session", sessionId, password?, team? }  // team: request resuming this specific slot (e.g. after a page refresh - see client/src/scenes/ReconnectScene.js); falls back to the first open slot if omitted or already taken
  *   { type: "leave_session" }
  *   { type: "start_game" }
  *   { type: "game_action", actionType, params }
@@ -20,7 +20,7 @@
  * Server -> client message types:
  *   { type: "session_list", sessions }
  *   { type: "session_created", session, team, gameState }
- *   { type: "session_joined", session, team, gameState }
+ *   { type: "session_joined", session, team, gameState }  // session.started tells the receiving client whether to land in NetworkLobbyScene or resume straight into BoardScene
  *   { type: "join_error", reason }              // not_found | wrong_password | full
  *   { type: "player_joined", team }              // broadcast to whoever's already there
  *   { type: "player_disconnected", team }        // broadcast on a socket closing
@@ -36,6 +36,7 @@ import {
   listSessions,
   joinSession,
   markDisconnected,
+  markStarted,
   applySessionAction,
   getSerializedGameState,
 } from "./sessions.js";
@@ -98,7 +99,7 @@ function handleMessage(socket, message) {
     }
 
     case "join_session": {
-      const result = joinSession(message.sessionId, message.password);
+      const result = joinSession(message.sessionId, message.password, message.team);
       if (!result.ok) {
         send(socket, { type: "join_error", reason: result.reason });
         return;
@@ -120,6 +121,11 @@ function handleMessage(socket, message) {
         send(socket, { type: "error", message: "not in a session" });
         return;
       }
+      // Recorded BEFORE broadcasting so that a client who refreshes and
+      // resumes (join_session) even a moment after this fires already sees
+      // session.started === true and skips straight past the lobby - see
+      // sessions.js's markStarted and ReconnectScene.js.
+      markStarted(sessionId);
       // Broadcast to EVERYONE in the session, including the sender (no
       // exceptSocket) - both players' clients handle this through the SAME
       // "on game_started, transition to BoardScene" listener (see

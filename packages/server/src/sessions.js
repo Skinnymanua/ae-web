@@ -156,6 +156,12 @@ export function createSession({ name, mapId, mapData, maxLevel, startingGold, un
     maxPlayers: playerCount,
     passwordHash: password ? hashPassword(password) : null,
     createdAt: Date.now(),
+    // Set true by markStarted() once start_game fires (see server/src/index.js).
+    // Exists so a client resuming after a refresh (see joinSession's
+    // preferredTeam param) can tell whether to land back in NetworkLobbyScene
+    // (not started yet) or straight into BoardScene (already in progress) -
+    // the session itself has no other way to distinguish those two states.
+    started: false,
   };
   const entry = { meta, gameState, connectedTeams: new Set([0]) };
   live.set(id, entry);
@@ -193,28 +199,54 @@ function toPublicSession(entry) {
     // so this is a low-risk edge case, but a safety net costs nothing).
     maxPlayers: entry.meta.maxPlayers ?? 2,
     gameOver: entry.gameState.gameOver,
+    // Defensive default for the same reason as maxPlayers above - a session
+    // file written before `started` existed just reads as "not started".
+    started: entry.meta.started ?? false,
   };
 }
 
 /**
- * Joins an existing session as the next open team slot. Returns
- * { ok: true, session, team, gameState } on success, or
- * { ok: false, reason } for "not_found" / "wrong_password" / "full".
- * `gameState` here is the full plain snapshot (see serializeGameState) -
- * everything the joining client needs to render the in-progress game.
+ * Joins an existing session. Returns { ok: true, session, team, gameState }
+ * on success, or { ok: false, reason } for "not_found" / "wrong_password" /
+ * "full". `gameState` here is the full plain snapshot (see
+ * serializeGameState) - everything the joining client needs to render the
+ * in-progress game.
+ *
+ * `preferredTeam`, if given and currently open, is granted instead of the
+ * usual "first open slot" - used when a client is RESUMING its own former
+ * team after a page refresh (see ReconnectScene.js) rather than joining
+ * fresh, so it reliably gets its own seat back instead of racing an
+ * opponent's simultaneous reconnect for team 0. Falls back to "first open
+ * slot" if omitted, already taken, or out of range - so a plain fresh join
+ * (no preferredTeam) behaves exactly as before.
  */
-export function joinSession(id, password) {
+export function joinSession(id, password, preferredTeam) {
   const entry = getEntry(id);
   if (!entry) return { ok: false, reason: "not_found" };
   if (entry.meta.passwordHash && hashPassword(password ?? "") !== entry.meta.passwordHash) {
     return { ok: false, reason: "wrong_password" };
   }
   const maxPlayers = entry.meta.maxPlayers ?? 2;
-  const openTeam = Array.from({ length: maxPlayers }, (_, t) => t).find((t) => !entry.connectedTeams.has(t));
+  const wantsPreferred =
+    Number.isInteger(preferredTeam) && preferredTeam >= 0 && preferredTeam < maxPlayers && !entry.connectedTeams.has(preferredTeam);
+  const openTeam = wantsPreferred
+    ? preferredTeam
+    : Array.from({ length: maxPlayers }, (_, t) => t).find((t) => !entry.connectedTeams.has(t));
   if (openTeam === undefined) return { ok: false, reason: "full" };
 
   entry.connectedTeams.add(openTeam);
   return { ok: true, session: toPublicSession(entry), team: openTeam, gameState: serializeGameState(entry.gameState) };
+}
+
+/** Flags a session as having started (see the `started` field's own comment
+ * on meta above) and persists that immediately - called once, from the
+ * start_game handler in server/src/index.js, before it broadcasts
+ * game_started to both sockets. */
+export function markStarted(id) {
+  const entry = live.get(id);
+  if (!entry || entry.meta.started) return;
+  entry.meta.started = true;
+  writeSessionFile(entry);
 }
 
 /**

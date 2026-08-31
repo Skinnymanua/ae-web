@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { MAPS } from "../maps/index.js";
 import { GameSocket } from "../net/socket.js";
+import { saveActiveSession } from "../net/sessionPersistence.js";
 import { createTextInput } from "../ui/textInput.js";
 import { SERVER_WS_URL } from "../constants.js";
 import { drawMenuPanel, addMenuButton } from "../ui/menuPanel.js";
@@ -228,6 +229,10 @@ export class CreateGameScene extends Phaser.Scene {
         },
         "session_created"
       );
+      // Saved so a refresh anywhere from here through the end of the match
+      // can resume as this same team - see net/sessionPersistence.js and
+      // ReconnectScene.js.
+      saveActiveSession({ sessionId: created.session.id, team: created.team, password: this.passwordValue });
       this.scene.start("NetworkLobbyScene", { socket, session: created.session, team: created.team, gameState: created.gameState });
     } catch (err) {
       this.statusText.setColor("#ff4444");

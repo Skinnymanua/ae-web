@@ -7,6 +7,7 @@ import { CreateGameScene } from "./scenes/CreateGameScene.js";
 import { JoinGameScene } from "./scenes/JoinGameScene.js";
 import { NetworkLobbyScene } from "./scenes/NetworkLobbyScene.js";
 import { BoardScene } from "./scenes/BoardScene.js";
+import { ReconnectScene } from "./scenes/ReconnectScene.js";
 import { MENU_WIDTH, MENU_HEIGHT } from "./constants.js";
 
 // Fixed viewport for the menu flow (see constants.js's MENU_WIDTH/HEIGHT) -
@@ -23,7 +24,13 @@ new Phaser.Game({
   // entry) - Phaser has no native text field, this is the standard way to
   // host real HTML form elements positioned within a Phaser scene.
   dom: { createContainer: true },
+  // ReconnectScene runs first (Phaser starts scene[0] by default) - it
+  // checks for a persisted networked session (see net/sessionPersistence.js)
+  // and either resumes straight into NetworkLobbyScene/BoardScene or falls
+  // through to MenuScene immediately, so a page refresh only ever costs an
+  // instant blank frame on an ordinary (non-networked) boot.
   scene: [
+    ReconnectScene,
     MenuScene,
     SkirmishSetupScene,
     SkirmishSettingsScene,

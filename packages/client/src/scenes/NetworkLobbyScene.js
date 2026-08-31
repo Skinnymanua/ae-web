@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { TEAM_COLOR } from "../constants.js";
 import { drawMenuPanel, addMenuButton } from "../ui/menuPanel.js";
+import { clearActiveSession } from "../net/sessionPersistence.js";
 
 const PANEL_WIDTH = 340;
 
@@ -129,6 +130,11 @@ export class NetworkLobbyScene extends Phaser.Scene {
 
   leave() {
     this.cleanupListeners();
+    // Deliberately choosing to leave, as opposed to a refresh - nothing to
+    // resume anymore, so drop the persisted session (see
+    // net/sessionPersistence.js) rather than leaving it around to be
+    // (unsuccessfully) resumed later.
+    clearActiveSession();
     this.socket.send("leave_session");
     this.socket.close();
     this.scene.start("NetworkMenuScene");

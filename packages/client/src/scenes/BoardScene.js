@@ -9,6 +9,7 @@ import { BOTTOM_BAR_HEIGHT } from "../ui/bottomBar.js";
 import { deserializeGameState } from "../net/deserializeGameState.js";
 import { setupNetworkedGameSync } from "../net/runGameAction.js";
 import { replayOpponentAction } from "../net/replayOpponentAction.js";
+import { clearActiveSession } from "../net/sessionPersistence.js";
 
 import { drawTileGrid, updateSelectedTileHighlight, refreshTombs } from "../render/tiles.js";
 import { refreshUnits, animateUnits } from "../render/units.js";
@@ -348,6 +349,11 @@ export class BoardScene extends Phaser.Scene {
     backButton.on("pointerup", (pointer, localX, localY, event) => {
       event.stopPropagation();
       if (this.networked_ && this.net_?.socket) {
+        // The session is already gone server-side at this point (see this
+        // method's own docstring above), but clear the client's persisted
+        // copy too (see net/sessionPersistence.js) so ReconnectScene doesn't
+        // try to resume a match that's already over on the next boot.
+        clearActiveSession();
         this.net_.socket.send("leave_session");
         this.net_.socket.close();
       }

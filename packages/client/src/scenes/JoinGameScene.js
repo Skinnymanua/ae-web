@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { GameSocket } from "../net/socket.js";
+import { saveActiveSession } from "../net/sessionPersistence.js";
 import { createTextInput } from "../ui/textInput.js";
 import { SERVER_WS_URL } from "../constants.js";
 import { drawMenuPanel, addMenuButton } from "../ui/menuPanel.js";
@@ -145,6 +146,10 @@ export class JoinGameScene extends Phaser.Scene {
         "session_joined",
         ["join_error"]
       );
+      // See CreateGameScene's identical call for why - lets a refresh from
+      // here on resume as this same team (net/sessionPersistence.js,
+      // ReconnectScene.js).
+      saveActiveSession({ sessionId: joined.session.id, team: joined.team, password });
       this.scene.start("NetworkLobbyScene", {
         socket: this.socket,
         session: joined.session,
