@@ -2,10 +2,36 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- Without this, mobile browsers assume a ~980px desktop-width page and
+         zoom the whole render out to fit the physical screen - which shrinks
+         everything uniformly no matter what the Phaser Scale Manager does.
+         user-scalable=no + maximum-scale=1 also stop an accidental
+         pinch-zoom mid-game, standard for anything meant to be played rather
+         than read. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
     <title>Ancient Empires — Web</title>
     <style>
-      html, body { margin: 0; padding: 0; background: #111; }
-      #game { display: flex; align-items: center; justify-content: center; height: 100vh; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: #111;
+        /* overscroll-behavior/touch-action: a phone's own pull-to-refresh
+           or rubber-band scroll fighting the board's own drag-to-pan
+           (render/camera.js's setupCameraDrag) is exactly the kind of thing
+           that makes a game feel broken on mobile even once it's sized
+           right. */
+        overscroll-behavior: none;
+        touch-action: none;
+      }
+      #game {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100vw;
+        height: 100vh;
+      }
+      /* Phaser.Scale.FIT (see main.js) sizes the canvas element itself via
+         inline styles it manages directly - nothing extra needed here. */
     </style>
   </head>
   <body>
