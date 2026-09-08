@@ -2,14 +2,13 @@ import Phaser from "phaser";
 import { MenuScene } from "./scenes/MenuScene.js";
 import { SkirmishSetupScene } from "./scenes/SkirmishSetupScene.js";
 import { SkirmishSettingsScene } from "./scenes/SkirmishSettingsScene.js";
-import { GameSettingScene } from "./scenes/GameSettingScene.js";
 import { NetworkMenuScene } from "./scenes/NetworkMenuScene.js";
 import { CreateGameScene } from "./scenes/CreateGameScene.js";
 import { JoinGameScene } from "./scenes/JoinGameScene.js";
 import { NetworkLobbyScene } from "./scenes/NetworkLobbyScene.js";
 import { BoardScene } from "./scenes/BoardScene.js";
 import { ReconnectScene } from "./scenes/ReconnectScene.js";
-import { MENU_WIDTH, MENU_HEIGHT } from "./constants.js";
+import { MENU_WIDTH, MENU_HEIGHT, getMenuSize } from "./constants.js";
 
 // Fixed viewport for the menu flow (see constants.js's MENU_WIDTH/HEIGHT) -
 // map choice happens at runtime in SkirmishSetupScene, and BoardScene itself
@@ -28,25 +27,23 @@ new Phaser.Game({
   // general wants this regardless; this project just didn't hit the
   // symptom until a continuously-moving sprite existed to expose it.
   pixelArt: true,
-  // FIT scales the actual <canvas> element (via CSS, not by re-rendering at
-  // a different internal resolution) to fill as much of its parent (#game,
-  // now sized to the full viewport - see index.html) as it can while
-  // keeping the game's own width:height ratio intact, and re-does this
-  // automatically on every window resize/orientation change with no extra
-  // listener needed. Practical effect: MenuScene's fixed 800x600 (or
-  // whatever a given BoardScene's board resizes to - see its own
-  // this.scale.resize() call) now renders LARGER on a small phone screen
-  // than it used to, since previously (Phaser.Scale.NONE, the default) the
-  // canvas just sat at its literal declared pixel size with no relationship
-  // to the actual screen at all. A board considerably bigger than the
-  // screen it's opened on will still scale DOWN to fit rather than
-  // overflow - camera.js's existing drag-to-pan is what makes the rest of
-  // an oversized board reachable from there, same as before this change.
+  // ENVELOP (not FIT): FIT only scales to the LIMITING dimension, so a
+  // board/menu with a wider-than-viewport aspect ratio ends up spanning
+  // full width with empty bars above/below rather than filling the screen -
+  // exactly the "stretched to the sides, flat" look. ENVELOP scales
+  // uniformly too (tiles stay square, nothing gets distorted - same as
+  // FIT in that respect), but scales to COVER the full viewport on both
+  // axes instead of fit inside it, at the cost of cropping whatever
+  // overflows past the edges on whichever axis doesn't match. For a board,
+  // that's fine - camera.js's existing drag-to-pan already handles reaching
+  // content beyond the visible area. For a menu, it means content placed
+  // very close to the true edge of MENU_WIDTH/HEIGHT could get slightly
+  // clipped on an aspect ratio far from 800:600 - worth watching for if
+  // any menu button ever seems to sit right at the edge of the screen.
   scale: {
     mode: Phaser.Scale.NONE,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
-    width: MENU_WIDTH,
-    height: MENU_HEIGHT,
+    autoCenter: Phaser.Scale.NO_CENTER,
+    ...getMenuSize(),
   },
   // Needed for ui/textInput.js's HTML <input> overlay (session name/password
   // entry) - Phaser has no native text field, this is the standard way to
@@ -62,7 +59,6 @@ new Phaser.Game({
     MenuScene,
     SkirmishSetupScene,
     SkirmishSettingsScene,
-    GameSettingScene,
     NetworkMenuScene,
     CreateGameScene,
     JoinGameScene,

@@ -50,10 +50,11 @@ export class BoardScene extends Phaser.Scene {
       this.startingGold_ = data?.startingGold ?? 300;
       this.unitCapacity_ = data?.unitCapacity ?? 15; // POPULATION_PRESET[0]
       this.playerCount_ = data?.playerCount ?? 2;
-      // From GameSettingScene, if the player ever visited it - see the
-      // players array built in create() below. Undefined (never visited)
-      // falls back to the original hardcoded behavior: every slot is a
-      // human (PLAYER_TYPE.LOCAL) on its own separate alliance.
+      // From SkirmishSettingsScene's per-team rows, if the local-skirmish
+      // flow was ever used - see the players array built in create() below.
+      // Undefined (e.g. never visited that screen) falls back to the
+      // original hardcoded behavior: every slot is a human (PLAYER_TYPE.LOCAL)
+      // on its own separate alliance.
       this.playerTypeIndices_ = data?.playerTypeIndices;
       this.allianceIndices_ = data?.allianceIndices;
     }
@@ -223,8 +224,8 @@ export class BoardScene extends Phaser.Scene {
         mapData: this.mapData_,
         unitDefs: unitsData.units,
         tileDefs: tilesData.tiles,
-        // One player per team, own alliance each unless GameSettingScene
-        // set something else - see this.playerTypeIndices_/allianceIndices_
+        // One player per team, own alliance each unless
+        // SkirmishSettingsScene's per-team rows set something else - see this.playerTypeIndices_/allianceIndices_
         // above and skirmishSettings.js's PLAYER_TYPE_OPTIONS/ALLIANCE_OPTIONS
         // for what those indices map to. A "None" team still gets a players[]
         // entry (turn.js's isTeamAlive already treats PLAYER_TYPE.NONE as not
@@ -281,7 +282,7 @@ export class BoardScene extends Phaser.Scene {
     createStatsPanel(this);
     setupCameraDrag(this);
 
-    // Covers only the (unusual, but GameSettingScene does allow it) case
+    // Covers only the (unusual, but SkirmishSettingsScene does allow it) case
     // where team 0 itself is a Robot - runPendingRobotTurns is a no-op for
     // everyone else (see isRobotControlledTurn: false whenever
     // this.networked_ or the current team isn't PLAYER_TYPE.AI). Fired and

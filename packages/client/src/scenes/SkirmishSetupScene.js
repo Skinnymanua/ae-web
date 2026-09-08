@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { MAPS } from "../maps/index.js";
-import { drawMenuPanel, addMenuButton } from "../ui/menuPanel.js";
+import { drawCornerBracketPanel, addTitleBar, addCircleButton } from "../ui/menuPanel.js";
 import { createScrollList } from "../ui/scrollList.js";
 import {
   MAX_LEVEL_OPTIONS,
@@ -13,34 +13,31 @@ import {
   DEFAULT_PLAYER_COUNT,
 } from "./skirmishSettings.js";
 
-const COLUMN_WIDTH = 360;
-const COLUMN_HEIGHT = 340;
-const COLUMN_Y = 64;
-const LEFT_COLUMN_X = 24;
-const RIGHT_COLUMN_X = 404;
-const COLUMN_PADDING = 16;
+const PANEL_WIDTH = 560;
+const PANEL_X_RATIO = 0.5; // centered
+const PANEL_Y = 96;
+const PANEL_HEIGHT = 340;
+const TITLE_BAR_HEIGHT = 44;
 
 /**
- * Skirmish (local PvP) game creation: pick a map (auto-discovered from
- * maps/index.js - every .json file dropped in that folder shows up here,
- * no registration needed), then hands off to BoardScene via
- * scene.start("BoardScene", {...}) - see BoardScene#init for the receiving
- * end. The three game settings (max level/gold/units) live in their own
- * submenu now (SkirmishSettingsScene) rather than crowding this screen -
- * see #openSettings/init below for how the current values travel there and
- * back without resetting.
+ * Skirmish (local PvP) game creation, step 1 of 2: map selection only. Used
+ * to also show a live settings summary + Settings/Game Setting buttons
+ * side by side with the map list on this same screen - split apart so
+ * picking a map and configuring the match are two separate steps instead
+ * of one crowded one, matching the reference's own "pick a map, then
+ * configure it" flow. Settings now live entirely in SkirmishSettingsScene
+ * (step 2 - see #goNext below), reached once a map is actually chosen.
  *
- * Styled with the same navy-panel treatment as MenuScene.js/NetworkMenuScene.js
- * (see ui/menuPanel.js) for the static chrome (title, Settings/Start/Back
- * buttons) - the direct submenu reached from the main menu's own "Skirmish"
- * button, so it should read as part of the same visual flow. The map list
- * itself stays a plain selectable row list rather than becoming beveled
- * buttons too: it's a SELECTION control (one of several rows highlighted
- * at a time), a different interaction than a menu button's simple
- * enabled/disabled navigate-or-don't - just wrapped in a matching bordered
- * panel for visual consistency, and now scrollable (ui/scrollList.js) so it
- * doesn't overflow the panel's fixed height once more maps get added than
- * fit on screen at once.
+ * Styled with the circular-button kit (ui/menuPanel.js's addTitleBar/
+ * drawCornerBracketPanel/addCircleButton) rather than the flat rectangular
+ * buttons this used before - see SkirmishSettingsScene.js for where that
+ * kit was first built out. The map list itself stays a plain selectable row
+ * list rather than becoming beveled/circular buttons too: it's a
+ * SELECTION control (one of several rows highlighted at a time), a
+ * different interaction than a menu button's simple enabled/disabled
+ * navigate-or-don't - just wrapped in the same corner-bracket panel for
+ * visual consistency, and scrollable (ui/scrollList.js) so it doesn't
+ * overflow the panel's fixed height once more maps exist than fit at once.
  */
 export class SkirmishSetupScene extends Phaser.Scene {
   constructor() {
@@ -49,54 +46,51 @@ export class SkirmishSetupScene extends Phaser.Scene {
 
   /** Restores whatever was passed back from SkirmishSettingsScene's "Back"
    * button, or starts fresh with defaults on a normal first entry from
-   * MenuScene (data undefined then). */
+   * MenuScene (data undefined then). Doesn't DO anything with the settings
+   * fields itself anymore (see class doc above) - just holds and forwards
+   * them so going Setup -> Settings -> Game Setting -> back -> Setup ->
+   * change map -> forward again doesn't silently reset anything. */
   init(data) {
     this.selectedMapId = data?.selectedMapId ?? MAPS[0]?.id ?? null;
     this.maxLevelIndex = data?.maxLevelIndex ?? MAX_LEVEL_OPTIONS.indexOf(DEFAULT_MAX_LEVEL);
     this.startingGoldIndex = data?.startingGoldIndex ?? STARTING_GOLD_OPTIONS.indexOf(DEFAULT_STARTING_GOLD);
     this.unitCapacityIndex = data?.unitCapacityIndex ?? UNIT_CAPACITY_OPTIONS.indexOf(DEFAULT_UNIT_CAPACITY);
     this.playerCountIndex = data?.playerCountIndex ?? PLAYER_COUNT_OPTIONS.indexOf(DEFAULT_PLAYER_COUNT);
-    // Per-team Player/Robot/None + alliance config from GameSettingScene -
-    // see #openGameSetting/#startGame below. Undefined (not yet visited)
-    // until the player opens that screen at least once; startGame falls
-    // back to "everyone human, own alliance" (the original hardcoded
-    // behavior) if they never do.
     this.playerTypeIndices = data?.playerTypeIndices;
     this.allianceIndices = data?.allianceIndices;
   }
 
   create() {
     const { width, height } = this.cameras.main;
-    this.add.rectangle(0, 0, width, height, 0x222222).setOrigin(0, 0);
+    this.add.rectangle(0, 0, width, height, 0x1a1a1a).setOrigin(0, 0);
 
-    this.add
-      .text(width / 2, 24, "Skirmish Setup", { fontSize: "26px", color: "#e8e8e8", fontStyle: "bold" })
-      .setOrigin(0.5, 0);
+    const panelX = width * PANEL_X_RATIO - PANEL_WIDTH / 2;
 
-    // Footer first - buildMapList's scroll list restores the previously
-    // selected map (if any) by calling select(), which fires onSelect and
-    // needs this.startButton to already exist to update its enabled state.
+    addTitleBar(this, panelX, 24, PANEL_WIDTH, TITLE_BAR_HEIGHT, {
+      title: "Select Map",
+      onBack: () => this.scene.start("MenuScene"),
+    });
+
     this.buildFooter();
-    this.buildSettingsSummary();
-    this.buildMapList();
+    this.buildMapList(panelX);
   }
 
-  buildMapList() {
-    drawMenuPanel(this, LEFT_COLUMN_X, COLUMN_Y, COLUMN_WIDTH, COLUMN_HEIGHT);
+  buildMapList(panelX) {
+    drawCornerBracketPanel(this, panelX, PANEL_Y, PANEL_WIDTH, PANEL_HEIGHT);
 
-    const startX = LEFT_COLUMN_X + COLUMN_PADDING;
-    const labelY = COLUMN_Y + COLUMN_PADDING;
-    this.add.text(startX, labelY, "Select Map", { fontSize: "16px", color: "#cccccc" });
+    const padding = 20;
+    const startX = panelX + padding;
+    const labelY = PANEL_Y + padding;
 
     if (MAPS.length === 0) {
-      this.add.text(startX, labelY + 22, "(no maps found in src/maps/)", { fontSize: "13px", color: "#888888" });
+      this.add.text(startX, labelY, "(no maps found in src/maps/)", { fontSize: "13px", color: "#888888" });
       return;
     }
 
-    const listY = labelY + 26;
-    const listWidth = COLUMN_WIDTH - COLUMN_PADDING * 2;
-    const listHeight = COLUMN_Y + COLUMN_HEIGHT - COLUMN_PADDING - listY;
-    const rowHeight = 28;
+    const listY = labelY;
+    const listWidth = PANEL_WIDTH - padding * 2;
+    const listHeight = PANEL_Y + PANEL_HEIGHT - padding - listY;
+    const rowHeight = 30;
 
     // createScrollList needs an actual Phaser container as its "parent" for
     // mask/hit-zone coordinate math (see its own doc comment) - this scene
@@ -120,116 +114,46 @@ export class SkirmishSetupScene extends Phaser.Scene {
       })),
       onSelect: (item) => {
         this.selectedMapId = item?.id ?? null;
-        this.startButton.setEnabled(!!this.selectedMapId);
+        this.nextButton.setEnabled(!!this.selectedMapId);
       },
     });
 
     if (this.selectedMapId) this.mapList.select(this.selectedMapId);
-    // No explicit this.mapList.destroy() needed here, unlike
-    // ui/dialogs.js's showBuyMenu using the equivalent purchaseStrip: that
-    // one closes WITHIN a long-lived BoardScene, so its global
-    // scene.input listeners need manual removal. This list lives for the
-    // whole duration of THIS scene - Phaser tears down a scene's own
-    // InputPlugin (and everything registered on it) automatically when the
-    // scene itself shuts down, e.g. navigating to Settings or starting the
-    // game.
   }
 
-  /** Read-only glance at the current settings (so you don't have to open the
-   * submenu just to check them) plus the button into it. */
-  buildSettingsSummary() {
-    drawMenuPanel(this, RIGHT_COLUMN_X, COLUMN_Y, COLUMN_WIDTH, COLUMN_HEIGHT);
+  buildFooter() {
+    const { width, height } = this.cameras.main;
+    const radius = 32;
 
-    const startX = RIGHT_COLUMN_X + COLUMN_PADDING;
-    const startY = COLUMN_Y + COLUMN_PADDING + 22;
-    this.add.text(startX, COLUMN_Y + COLUMN_PADDING, "Game Settings", { fontSize: "16px", color: "#cccccc" });
-
-    this.settingsSummaryText = this.add.text(startX, startY, "", {
-      fontSize: "14px",
-      color: "#ffffff",
-      lineSpacing: 10,
-    });
-    this.updateSettingsSummary();
-
-    addMenuButton(this, startX, startY + 120, COLUMN_WIDTH - COLUMN_PADDING * 2, 40, {
-      label: "Settings",
-      fontSize: "15px",
-      onClick: () => this.openSettings(),
+    addCircleButton(this, radius + 20, height - radius - 20, radius, {
+      icon: "chevronLeft",
+      borderColor: 0xe8a33d,
+      onClick: () => this.scene.start("MenuScene"),
     });
 
-    addMenuButton(this, startX, startY + 164, COLUMN_WIDTH - COLUMN_PADDING * 2, 40, {
-      label: "Game Setting",
-      fontSize: "15px",
-      onClick: () => this.openGameSetting(),
+    this.nextButton = addCircleButton(this, width - radius - 20, height - radius - 20, radius, {
+      icon: "check",
+      borderColor: 0x5ecc6a,
+      enabled: !!this.selectedMapId,
+      onClick: () => this.goNext(),
     });
   }
 
-  updateSettingsSummary() {
-    const lines = [
-      `Max Level: ${MAX_LEVEL_OPTIONS[this.maxLevelIndex]}`,
-      `Starting Gold: ${STARTING_GOLD_OPTIONS[this.startingGoldIndex]}`,
-      `Max Units: ${UNIT_CAPACITY_OPTIONS[this.unitCapacityIndex]}`,
-      `Players: ${PLAYER_COUNT_OPTIONS[this.playerCountIndex]}`,
-    ];
-    this.settingsSummaryText.setText(lines.join("\n"));
-  }
-
-  openSettings() {
+  goNext() {
+    if (!this.selectedMapId) return;
     this.scene.start("SkirmishSettingsScene", {
       selectedMapId: this.selectedMapId,
       maxLevelIndex: this.maxLevelIndex,
       startingGoldIndex: this.startingGoldIndex,
       unitCapacityIndex: this.unitCapacityIndex,
       playerCountIndex: this.playerCountIndex,
-    });
-  }
-
-  openGameSetting() {
-    this.scene.start("GameSettingScene", {
-      selectedMapId: this.selectedMapId,
-      maxLevelIndex: this.maxLevelIndex,
-      startingGoldIndex: this.startingGoldIndex,
-      unitCapacityIndex: this.unitCapacityIndex,
-      playerCountIndex: this.playerCountIndex,
-      playerCount: PLAYER_COUNT_OPTIONS[this.playerCountIndex],
       playerTypeIndices: this.playerTypeIndices,
       allianceIndices: this.allianceIndices,
-    });
-  }
-
-  buildFooter() {
-    const { width, height } = this.cameras.main;
-    const buttonWidth = 160;
-    const buttonHeight = 42;
-    const gap = 16;
-
-    this.startButton = addMenuButton(this, width / 2 - buttonWidth - gap / 2, height - 60, buttonWidth, buttonHeight, {
-      label: "Start Game",
-      enabled: !!this.selectedMapId,
-      onClick: () => this.startGame(),
-    });
-
-    addMenuButton(this, width / 2 + gap / 2, height - 60, buttonWidth, buttonHeight, {
-      label: "Back",
-      onClick: () => this.scene.start("MenuScene"),
-    });
-  }
-
-  startGame() {
-    if (!this.selectedMapId) return;
-    const map = MAPS.find((m) => m.id === this.selectedMapId);
-    if (!map) return;
-    this.scene.start("BoardScene", {
-      mapData: map.data,
-      maxLevel: MAX_LEVEL_OPTIONS[this.maxLevelIndex],
-      startingGold: STARTING_GOLD_OPTIONS[this.startingGoldIndex],
-      unitCapacity: UNIT_CAPACITY_OPTIONS[this.unitCapacityIndex],
-      playerCount: PLAYER_COUNT_OPTIONS[this.playerCountIndex],
-      // From GameSettingScene, if the player ever opened it - see
-      // BoardScene#init for the "everyone human, own alliance" fallback
-      // when these are undefined (never visited that screen).
-      playerTypeIndices: this.playerTypeIndices,
-      allianceIndices: this.allianceIndices,
+      // Left at its default ("SkirmishSetupScene") by not passing
+      // returnScene at all - see SkirmishSettingsScene#init. That default
+      // is also what it checks to know whether it's in this local-skirmish
+      // flow (show Game Setting + Start) or reused by CreateGameScene's
+      // networked one (show only Back) - see that scene's own comment.
     });
   }
 }

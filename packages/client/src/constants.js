@@ -8,6 +8,21 @@ export const TILE_SIZE = 48;
 export const MENU_WIDTH = 800;
 export const MENU_HEIGHT = 600;
 
+/** Menu-flow canvas size (see MENU_WIDTH/HEIGHT above): the fixed default,
+ * shrunk to fit an actually-smaller viewport (a phone in particular) rather
+ * than always rendered at the literal 800x600 regardless of screen size.
+ * Only ever shrinks - a desktop window bigger than 800x600 still gets the
+ * plain fixed size, unchanged from before this existed. Read at each call
+ * site (main.js's boot, MenuScene/ReconnectScene's resize-on-entry) rather
+ * than once, since window.innerWidth/Height can change between them (e.g.
+ * a phone rotated between boot and navigating back to MenuScene). */
+export function getMenuSize() {
+  return {
+    width: Math.min(MENU_WIDTH, window.innerWidth),
+    height: Math.min(MENU_HEIGHT, window.innerHeight),
+  };
+}
+
 // packages/server's WebSocket endpoint (see server/src/index.js's PORT).
 // Same-origin ws:// on port 8080 for local dev; override via env for a real
 // deployment where the server isn't on localhost.
