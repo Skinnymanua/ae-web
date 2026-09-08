@@ -5,8 +5,8 @@ export const TILE_SIZE = 48;
 // this). Used by main.js at boot and by both menu scenes on re-entry, so the
 // canvas is guaranteed back to this size if the player ever navigates from
 // BoardScene back to a menu screen after that scene resized it to fit a map.
-export const MENU_WIDTH = 600;
-export const MENU_HEIGHT = 600;
+export const MENU_WIDTH = 800;
+export const MENU_HEIGHT = 800;
 
 /** Menu-flow canvas size (see MENU_WIDTH/HEIGHT above): the fixed default,
  * shrunk to fit an actually-smaller viewport (a phone in particular) rather
