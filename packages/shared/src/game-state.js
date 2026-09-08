@@ -738,8 +738,10 @@ export class GameState {
       }
     }
 
-    this.collectIncome(this.currentTeam);
-    return { currentTeam: this.currentTeam, ...result };
+    // Captured for display (see ui/messageBanner.js's "Turn N / Income +G"
+    // banner) - collectIncome's return value was previously just discarded.
+    const income = this.collectIncome(this.currentTeam);
+    return { currentTeam: this.currentTeam, income, ...result };
   }
 
   isCurrentTeam(team) {

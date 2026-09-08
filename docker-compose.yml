@@ -18,7 +18,7 @@ services:
         # Must match nginx.conf's server_name / the domain you run
         # init-letsencrypt.sh against. wss:// (not ws://) since nginx now
         # terminates TLS on 443 - see nginx.conf's /ws location.
-        VITE_SERVER_WS_URL: ${VITE_SERVER_WS_URL:-wss://YOUR_DOMAIN_HERE/ws}
+        VITE_SERVER_WS_URL: wss://aetest.thehereandnow.us/ws
     ports:
       - "80:80"    # ACME challenge + redirect to https (see nginx.conf)
       - "443:443"

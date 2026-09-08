@@ -8,6 +8,7 @@ import { refreshTombs, refreshTileTexture } from "../render/tiles.js";
 import { animateHpChanges } from "../render/hpChange.js";
 import { playAttackHitSequence } from "../render/attackEffect.js";
 import { updateBottomBarEconomy } from "../ui/bottomBar.js";
+import { showMessage, showTwoLineMessage } from "../render/messageBanner.js";
 
 // A short beat between each of the robot's own actions so its turn reads as
 // a sequence of moves happening one after another, not everything resolving
@@ -104,11 +105,13 @@ const ANIMATORS = {
   async occupy(scene, params) {
     await runGameAction(scene, "occupy", params.unitId, params.x, params.y);
     refreshTileTexture(scene, params.x, params.y);
+    showMessage(scene, "Occupied");
   },
 
   async repair(scene, params) {
     await runGameAction(scene, "repair", params.unitId, params.x, params.y);
     refreshTileTexture(scene, params.x, params.y);
+    showMessage(scene, "Repaired");
   },
 };
 
@@ -124,6 +127,9 @@ async function applyGenericAction(scene, action) {
   const result = await runGameAction(scene, action.type, ...args);
   if (result?.hpChanges?.length > 0) {
     await new Promise((resolve) => animateHpChanges(scene, result.hpChanges, resolve));
+  }
+  if (action.type === "endTurn") {
+    showTwoLineMessage(scene, `Turn ${scene.game_.turn}`, `Income +${result.income}`);
   }
 }
 

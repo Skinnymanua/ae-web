@@ -12,9 +12,9 @@
 # something to start with long enough for certbot to replace it for real.
 set -euo pipefail
 
-DOMAIN="YOUR_DOMAIN_HERE"   # must match nginx.conf's server_name
-EMAIL="you@example.com"     # Let's Encrypt sends renewal/expiry notices here
-STAGING=1                   # 1 = LE's staging environment (untrusted cert, but
+DOMAIN="aetest.thehereandnow.us"   # must match nginx.conf's server_name
+EMAIL="test@thehereandnow.us"     # Let's Encrypt sends renewal/expiry notices here
+STAGING=0                   # 1 = LE's staging environment (untrusted cert, but
                              # no rate limit risk) - flip to 0 once this runs
                              # clean end to end, then run it again for real
 

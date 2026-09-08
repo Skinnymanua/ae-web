@@ -11,6 +11,7 @@ import { BOTTOM_BAR_HEIGHT } from "./bottomBar.js";
 import { panCameraToUnit, getCameraTargetForUnit } from "../render/camera.js";
 import { canMoveAgain } from "@ae/shared/src/combat.js";
 import { runGameAction } from "../net/runGameAction.js";
+import { showMessage } from "../render/messageBanner.js";
 
 /** Returns [{x,y}] of enemy-occupied tiles within `unit`'s attack range. */
 function getAttackableEnemyPositions(scene, unit) {
@@ -323,6 +324,7 @@ export function showActionBar(scene, unit, x, y) {
         await runGameAction(scene, "occupy", unit.id, x, y);
         scene.animating = false;
         refreshTileTexture(scene, x, y);
+        showMessage(scene, "Occupied");
         finishUnitActionOrCharge(scene, unit);
       },
     });
@@ -335,6 +337,7 @@ export function showActionBar(scene, unit, x, y) {
         await runGameAction(scene, "repair", unit.id, x, y);
         scene.animating = false;
         refreshTileTexture(scene, x, y);
+        showMessage(scene, "Repaired");
         finishUnitActionOrCharge(scene, unit);
       },
     });

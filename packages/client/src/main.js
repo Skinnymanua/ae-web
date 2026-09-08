@@ -21,6 +21,15 @@ new Phaser.Game({
   height: MENU_HEIGHT,
   parent: "game",
   backgroundColor: "#222222",
+  // Sets NEAREST texture filtering + rounds every sprite's render position
+  // to whole pixels. Without this, a moving sprite crossing a tile boundary
+  // at a fractional pixel position (animateUnitMove's whole reason for
+  // being smooth rather than tile-stepped) bilinear-samples a thin strip of
+  // the ADJACENT tile's texture in along the seam - visible as a flickering
+  // line hovering just above/beside units while they walk. Pixel art in
+  // general wants this regardless; this project just didn't hit the
+  // symptom until a continuously-moving sprite existed to expose it.
+  pixelArt: true,
   // Needed for ui/textInput.js's HTML <input> overlay (session name/password
   // entry) - Phaser has no native text field, this is the standard way to
   // host real HTML form elements positioned within a Phaser scene.

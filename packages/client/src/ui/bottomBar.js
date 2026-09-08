@@ -23,6 +23,7 @@ import { refreshStatsPanel } from "./statsPanel.js";
 import { animateHpChanges } from "../render/hpChange.js";
 import { runGameAction } from "../net/runGameAction.js";
 import { runPendingRobotTurns } from "../net/robotDriver.js";
+import { showTwoLineMessage } from "../render/messageBanner.js";
 
 export const BOTTOM_BAR_HEIGHT = 44;
 const BAR_HEIGHT = BOTTOM_BAR_HEIGHT;
@@ -69,6 +70,7 @@ export function createBottomBar(scene) {
       animateHpChanges(scene, result.hpChanges, async () => {
         refreshUnits(scene);
         refreshStatsPanel(scene);
+        showTwoLineMessage(scene, `Turn ${scene.game_.turn}`, `Income +${result.income}`);
         // Hands off to whichever Robot team(s) come next, if any - a no-op
         // (returns immediately) if the team we just moved to is human. See
         // net/robotDriver.js's own docstring for why this loops rather
@@ -148,24 +150,6 @@ export function createBottomBar(scene) {
     .setOrigin(0, 0.5);
   container.add(goldText);
 
-  // --- turn count (no original asset found — drawn as a simple clock) ---
-  // Kept clear of the End Turn zone on the right (zoneX = barWidth - 100).
-  const turnX = 400;
-  const clockG = scene.add.graphics();
-  clockG.lineStyle(2, 0xffffff, 1);
-  clockG.strokeCircle(turnX, BAR_HEIGHT / 2, 9);
-  clockG.beginPath();
-  clockG.moveTo(turnX, BAR_HEIGHT / 2);
-  clockG.lineTo(turnX, BAR_HEIGHT / 2 - 6);
-  clockG.moveTo(turnX, BAR_HEIGHT / 2);
-  clockG.lineTo(turnX + 4, BAR_HEIGHT / 2);
-  clockG.strokePath();
-  container.add(clockG);
-  const turnText = scene.add
-    .text(turnX + 16, BAR_HEIGHT / 2, "-", { fontSize: "15px", color: "#ffffff" })
-    .setOrigin(0, 0.5);
-  container.add(turnText);
-
   scene.bottomBar = {
     container,
     bg,
@@ -177,7 +161,6 @@ export function createBottomBar(scene) {
     terrainSubText,
     popText,
     goldText,
-    turnText,
   };
 
   updateBottomBarEconomy(scene);
@@ -222,6 +205,5 @@ export function updateBottomBarEconomy(scene) {
   const player = scene.game_.players[scene.game_.currentTeam];
   bar.goldText.setText(String(player?.gold ?? 0));
   bar.popText.setText(`${player?.population ?? 0}/${scene.game_.rule.unitCapacity}`);
-  bar.turnText.setText(`Turn ${scene.game_.turn}`);
   bar.bg.setFillStyle(TEAM_COLOR[scene.game_.currentTeam], 0.85);
 }
