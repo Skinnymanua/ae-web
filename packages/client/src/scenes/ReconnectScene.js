@@ -1,7 +1,6 @@
 import Phaser from "phaser";
 import { GameSocket } from "../net/socket.js";
-import { SERVER_WS_URL } from "../constants.js";
-import { MENU_WIDTH, MENU_HEIGHT } from "../constants.js";
+import { SERVER_WS_URL, getMenuSize } from "../constants.js";
 import { loadActiveSession, clearActiveSession } from "../net/sessionPersistence.js";
 
 /**
@@ -40,11 +39,12 @@ export class ReconnectScene extends Phaser.Scene {
       return;
     }
 
-    this.scale.resize(MENU_WIDTH, MENU_HEIGHT);
-    this.cameras.main.setSize(MENU_WIDTH, MENU_HEIGHT);
-    this.add.rectangle(0, 0, MENU_WIDTH, MENU_HEIGHT, 0x222222).setOrigin(0, 0);
+    const { width: menuWidth, height: menuHeight } = getMenuSize();
+    this.scale.resize(menuWidth, menuHeight);
+    this.cameras.main.setSize(menuWidth, menuHeight);
+    this.add.rectangle(0, 0, menuWidth, menuHeight, 0x222222).setOrigin(0, 0);
     this.add
-      .text(MENU_WIDTH / 2, MENU_HEIGHT / 2, "Reconnecting...", { fontSize: "18px", color: "#cccccc" })
+      .text(menuWidth / 2, menuHeight / 2, "Reconnecting...", { fontSize: "18px", color: "#cccccc" })
       .setOrigin(0.5);
 
     this.resume(saved);

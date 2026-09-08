@@ -1,6 +1,6 @@
 import Phaser from "phaser";
-import { MENU_WIDTH, MENU_HEIGHT } from "../constants.js";
 import { drawMenuPanel, addMenuButton } from "../ui/menuPanel.js";
+import { getMenuSize } from "../constants.js";
 
 const PANEL_WIDTH = 300;
 const ROW_HEIGHT = 42;
@@ -33,11 +33,14 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create() {
-    // Explicit resize back to the fixed menu size - guards against landing
-    // here after BoardScene resized the canvas to fit a map (no "back to
-    // menu" button exists yet, but this makes that safe to add later).
-    this.scale.resize(MENU_WIDTH, MENU_HEIGHT);
-    this.cameras.main.setSize(MENU_WIDTH, MENU_HEIGHT);
+    // Explicit resize back to the menu size - guards against landing here
+    // after BoardScene resized the canvas to fit a map. Recomputed each
+    // time (not the plain MENU_WIDTH/HEIGHT constants) so a phone-sized
+    // viewport keeps getting the shrunk-to-fit size on every re-entry, not
+    // just at boot - see constants.js's getMenuSize().
+    const { width: menuWidth, height: menuHeight } = getMenuSize();
+    this.scale.resize(menuWidth, menuHeight);
+    this.cameras.main.setSize(menuWidth, menuHeight);
 
     const { width, height } = this.cameras.main;
     this.add.rectangle(0, 0, width, height, 0x222222).setOrigin(0, 0);
