@@ -6,7 +6,22 @@ export const TILE_SIZE = 48;
 // canvas is guaranteed back to this size if the player ever navigates from
 // BoardScene back to a menu screen after that scene resized it to fit a map.
 export const MENU_WIDTH = 800;
-export const MENU_HEIGHT = 600;
+export const MENU_HEIGHT = 800;
+
+/** Menu-flow canvas size (see MENU_WIDTH/HEIGHT above): the fixed default,
+ * shrunk to fit an actually-smaller viewport (a phone in particular) rather
+ * than always rendered at the literal 800x600 regardless of screen size.
+ * Only ever shrinks - a desktop window bigger than 800x600 still gets the
+ * plain fixed size, unchanged from before this existed. Read at each call
+ * site (main.js's boot, MenuScene/ReconnectScene's resize-on-entry) rather
+ * than once, since window.innerWidth/Height can change between them (e.g.
+ * a phone rotated between boot and navigating back to MenuScene). */
+export function getMenuSize() {
+  return {
+    width: Math.min(MENU_WIDTH, window.innerWidth),
+    height: Math.min(MENU_HEIGHT, window.innerHeight),
+  };
+}
 
 /** Menu-flow canvas size (see MENU_WIDTH/HEIGHT above): the fixed default,
  * shrunk to fit an actually-smaller viewport (a phone in particular) rather
