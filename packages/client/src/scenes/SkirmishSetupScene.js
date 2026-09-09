@@ -13,11 +13,12 @@ import {
   DEFAULT_PLAYER_COUNT,
 } from "./skirmishSettings.js";
 
-const PANEL_WIDTH = 560;
-const PANEL_X_RATIO = 0.5; // centered
-const PANEL_Y = 96;
-const PANEL_HEIGHT = 340;
+const MAX_PANEL_WIDTH = 560;
+const PANEL_MARGIN_X = 20; // min gap either side of the panel on a narrow canvas
+const PANEL_Y = 84;
 const TITLE_BAR_HEIGHT = 44;
+const FOOTER_BUTTON_RADIUS = 32;
+const FOOTER_RESERVED_HEIGHT = FOOTER_BUTTON_RADIUS * 2 + 40; // buttons + top/bottom breathing room
 
 /**
  * Skirmish (local PvP) game creation, step 1 of 2: map selection only. Used
@@ -37,7 +38,16 @@ const TITLE_BAR_HEIGHT = 44;
  * different interaction than a menu button's simple enabled/disabled
  * navigate-or-don't - just wrapped in the same corner-bracket panel for
  * visual consistency, and scrollable (ui/scrollList.js) so it doesn't
- * overflow the panel's fixed height once more maps exist than fit at once.
+ * overflow the panel's height once more maps exist than fit at once.
+ *
+ * Panel now FILLS the space between the title bar and the footer buttons
+ * (see #create) rather than sitting at a fixed height regardless of canvas
+ * shape - on a portrait phone (see constants.js's getMenuSize(), which now
+ * matches the device's own aspect ratio instead of a fixed 800x600), that
+ * extra vertical room shows more of the map list at once instead of
+ * leaving a large empty band below a short fixed-height panel. Width is
+ * clamped to the canvas width too, so a narrow phone doesn't get a panel
+ * wider than the screen it's on.
  */
 export class SkirmishSetupScene extends Phaser.Scene {
   constructor() {
@@ -64,33 +74,34 @@ export class SkirmishSetupScene extends Phaser.Scene {
     const { width, height } = this.cameras.main;
     this.add.rectangle(0, 0, width, height, 0x1a1a1a).setOrigin(0, 0);
 
-    const panelX = width * PANEL_X_RATIO - PANEL_WIDTH / 2;
+    const panelWidth = Math.min(MAX_PANEL_WIDTH, width - PANEL_MARGIN_X * 2);
+    const panelX = width / 2 - panelWidth / 2;
+    const panelHeight = Math.max(160, height - FOOTER_RESERVED_HEIGHT - PANEL_Y);
 
-    addTitleBar(this, panelX, 24, PANEL_WIDTH, TITLE_BAR_HEIGHT, {
+    addTitleBar(this, panelX, 24, panelWidth, TITLE_BAR_HEIGHT, {
       title: "Select Map",
       onBack: () => this.scene.start("MenuScene"),
     });
 
     this.buildFooter();
-    this.buildMapList(panelX);
+    this.buildMapList(panelX, panelWidth, panelHeight);
   }
 
-  buildMapList(panelX) {
-    drawCornerBracketPanel(this, panelX, PANEL_Y, PANEL_WIDTH, PANEL_HEIGHT);
+  buildMapList(panelX, panelWidth, panelHeight) {
+    drawCornerBracketPanel(this, panelX, PANEL_Y, panelWidth, panelHeight);
 
     const padding = 20;
     const startX = panelX + padding;
-    const labelY = PANEL_Y + padding;
+    const listY = PANEL_Y + padding;
 
     if (MAPS.length === 0) {
-      this.add.text(startX, labelY, "(no maps found in src/maps/)", { fontSize: "13px", color: "#888888" });
+      this.add.text(startX, listY, "(no maps found in src/maps/)", { fontSize: "13px", color: "#888888" });
       return;
     }
 
-    const listY = labelY;
-    const listWidth = PANEL_WIDTH - padding * 2;
-    const listHeight = PANEL_Y + PANEL_HEIGHT - padding - listY;
-    const rowHeight = 30;
+    const listWidth = panelWidth - padding * 2;
+    const listHeight = PANEL_Y + panelHeight - padding - listY;
+    const rowHeight = 40;
 
     // createScrollList needs an actual Phaser container as its "parent" for
     // mask/hit-zone coordinate math (see its own doc comment) - this scene
@@ -123,17 +134,15 @@ export class SkirmishSetupScene extends Phaser.Scene {
 
   buildFooter() {
     const { width, height } = this.cameras.main;
-    const radius = 32;
+    const radius = FOOTER_BUTTON_RADIUS;
 
     addCircleButton(this, radius + 20, height - radius - 20, radius, {
-      icon: "chevronLeft",
-      borderColor: 0xe8a33d,
+      icon: "back",
       onClick: () => this.scene.start("MenuScene"),
     });
 
     this.nextButton = addCircleButton(this, width - radius - 20, height - radius - 20, radius, {
-      icon: "check",
-      borderColor: 0x5ecc6a,
+      icon: "confirm",
       enabled: !!this.selectedMapId,
       onClick: () => this.goNext(),
     });

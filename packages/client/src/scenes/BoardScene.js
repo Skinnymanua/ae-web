@@ -201,8 +201,18 @@ export class BoardScene extends Phaser.Scene {
     // sample-map.json at 480x480 inside an 800x600 canvas) or forcing scroll
     // for any map bigger. Capped so an unusually large map still scrolls via
     // input/cameraDrag.js instead of producing an oversized browser window.
-    const MAX_VIEWPORT_WIDTH = 1000;
-    const MAX_VIEWPORT_HEIGHT = 700;
+    // Capped to the actual viewport too, not just a fixed desktop-sized
+    // ceiling - without this, a phone whose visible height is shorter than
+    // 700px could get a canvas taller than what's actually on screen (mode:
+    // NONE applies no CSS scaling to bring it back down), silently pushing
+    // anything anchored near the bottom of the canvas - ui/dialogs.js's
+    // buy-menu Buy/Cancel buttons, in particular - off the visible area
+    // entirely. The board's own existing drag-to-pan (render/camera.js)
+    // already handles a map whose CONTENT is taller than what's visible;
+    // this just guarantees the canvas itself - and everything anchored to
+    // its edges - never exceeds the actual screen.
+    const MAX_VIEWPORT_WIDTH = Math.min(1000, window.innerWidth);
+    const MAX_VIEWPORT_HEIGHT = Math.min(700, window.innerHeight);
     const targetWidth = Math.min(boardWidth * TILE_SIZE, MAX_VIEWPORT_WIDTH);
     const targetHeight = Math.min(BOARD_OFFSET_Y + boardHeight * TILE_SIZE + BOTTOM_BAR_HEIGHT, MAX_VIEWPORT_HEIGHT);
     this.scale.resize(targetWidth, targetHeight);

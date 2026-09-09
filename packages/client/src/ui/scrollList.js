@@ -109,13 +109,25 @@ export function createScrollList(scene, opts) {
   const entries = [];
   let selectedId = null;
 
+  // Small gap between rows (rowHeight minus this, not the full rowHeight)
+  // so each row's highlight reads as a distinct block rather than one
+  // continuous strip - the "more space between rows" of the two asks this
+  // was written for, alongside the highlight itself.
+  const ROW_GAP = 4;
+  const SELECTED_BG = 0x2f8f8f;
+
   items.forEach((item, i) => {
     const rowY = i * rowHeight;
+    // Full-width, not just the text - this is what makes the selected row
+    // read as one highlighted block (see the reference's solid teal
+    // "Tutorial" row) instead of just the label changing color.
+    const bg = scene.add.rectangle(0, rowY, width, rowHeight - ROW_GAP, 0x000000, 0).setOrigin(0, 0);
+    listContainer.add(bg);
     const text = scene.add
-      .text(6, rowY + rowHeight / 2, item.label, { fontSize: "14px", color: item.dimmed ? "#666677" : "#ffffff" })
+      .text(12, rowY + (rowHeight - ROW_GAP) / 2, item.label, { fontSize: "14px", color: item.dimmed ? "#666677" : "#ffffff" })
       .setOrigin(0, 0.5);
     listContainer.add(text);
-    entries.push({ item, text });
+    entries.push({ item, text, bg });
   });
 
   // item.dimmed (same convention as ui/purchaseStrip.js's own per-item
@@ -128,7 +140,9 @@ export function createScrollList(scene, opts) {
     if (item?.dimmed) return;
     selectedId = id;
     for (const entry of entries) {
-      entry.text.setColor(entry.item.dimmed ? "#666677" : entry.item.id === id ? "#44dd88" : "#ffffff");
+      const isSelected = entry.item.id === id;
+      entry.bg.setFillStyle(SELECTED_BG, isSelected ? 1 : 0);
+      entry.text.setColor(entry.item.dimmed ? "#666677" : "#ffffff");
     }
     onSelect?.(item);
   }

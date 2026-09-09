@@ -17,13 +17,16 @@ import {
   defaultAllianceIndex,
 } from "./skirmishSettings.js";
 
-const PANEL_WIDTH = 460;
-const PANEL_Y = 96;
+const MAX_PANEL_WIDTH = 460;
+const PANEL_MARGIN_X = 20; // min gap either side of the panel on a narrow canvas
 const OPTION_ROW_HEIGHT = 40;
 const TEAM_ROW_HEIGHT = 50;
 const TEAM_SECTION_GAP = 16; // between the last option row and the first team row
 const TITLE_BAR_HEIGHT = 44;
 const SWATCH_SIZE = 28;
+const FOOTER_BUTTON_RADIUS = 32;
+const FOOTER_RESERVED_HEIGHT = FOOTER_BUTTON_RADIUS * 2 + 40;
+const PANEL_TOP_MIN = 24 + TITLE_BAR_HEIGHT + 16; // just below the title bar
 
 /**
  * Skirmish (local PvP) game creation, step 2 of 2: match settings AND, for
@@ -37,6 +40,16 @@ const SWATCH_SIZE = 28;
  * step. See #rebuildTeamRows for how the team-row count stays in sync with
  * the Players stepper right above it, live, without needing a screen
  * transition to see the new rows appear.
+ *
+ * Panel is vertically CENTERED in the space between the title bar and the
+ * footer buttons (see #redrawPanel), not pinned at a fixed Y - on a
+ * portrait phone (constants.js's getMenuSize() now matches the device's
+ * own aspect ratio instead of a fixed 800x600), that gap is much taller
+ * than this content needs, and centering it there reads better than
+ * leaving a large empty band below a panel stuck near the top. Width is
+ * clamped to the canvas width too. Recomputed every redrawPanel() call
+ * (not just once in create()), since panel height itself changes when the
+ * Players stepper adds/removes team rows.
  *
  * Also still reused directly by CreateGameScene for the networked-game-
  * creation flow (see its own #openSettings-equivalent call site), which
@@ -79,9 +92,10 @@ export class SkirmishSettingsScene extends Phaser.Scene {
     const { width, height } = this.cameras.main;
     this.add.rectangle(0, 0, width, height, 0x1a1a1a).setOrigin(0, 0);
 
-    this.panelX = width / 2 - PANEL_WIDTH / 2;
+    this.panelWidth = Math.min(MAX_PANEL_WIDTH, width - PANEL_MARGIN_X * 2);
+    this.panelX = width / 2 - this.panelWidth / 2;
 
-    addTitleBar(this, this.panelX, 24, PANEL_WIDTH, TITLE_BAR_HEIGHT, {
+    addTitleBar(this, this.panelX, 24, this.panelWidth, TITLE_BAR_HEIGHT, {
       title: "Game Settings",
       onBack: () => this.goBack(),
     });
@@ -121,24 +135,31 @@ export class SkirmishSettingsScene extends Phaser.Scene {
 
   /** Draws (or redraws, after the Players stepper changes) the panel at
    * whatever height the current option-row count + team-row count needs,
-   * then the four option rows, then the team rows (if isLocalSkirmish).
-   * Option-row steppers are recreated too, not just the panel - simplest
-   * way to guarantee nothing references a destroyed Graphics object,
-   * given the panel behind everything gets torn down and redrawn. */
+   * vertically centered in the space below the title bar and above the
+   * footer buttons (see class doc above), then the four option rows, then
+   * the team rows (if isLocalSkirmish). Option-row steppers are recreated
+   * too, not just the panel - simplest way to guarantee nothing references
+   * a destroyed Graphics object, given the panel behind everything gets
+   * torn down and redrawn. */
   redrawPanel() {
     this.panelGraphics?.destroy();
     this.optionRowObjects?.forEach((obj) => obj.destroy());
     this.optionRowObjects = [];
 
+    const { height } = this.cameras.main;
     const playerCount = PLAYER_COUNT_OPTIONS[this.playerCountIndex];
     const teamSectionHeight = this.isLocalSkirmish ? TEAM_SECTION_GAP + 24 + playerCount * TEAM_ROW_HEIGHT : 0;
     const panelHeight = 30 + this.optionRows.length * OPTION_ROW_HEIGHT + teamSectionHeight + 20;
-    this.panelGraphics = drawCornerBracketPanel(this, this.panelX, PANEL_Y, PANEL_WIDTH, panelHeight);
+
+    const availableBottom = height - FOOTER_RESERVED_HEIGHT;
+    const panelY = Math.max(PANEL_TOP_MIN, PANEL_TOP_MIN + (availableBottom - PANEL_TOP_MIN - panelHeight) / 2);
+
+    this.panelGraphics = drawCornerBracketPanel(this, this.panelX, panelY, this.panelWidth, panelHeight);
 
     this.optionRows.forEach((row, i) => {
-      const y = PANEL_Y + 30 + i * OPTION_ROW_HEIGHT;
+      const y = panelY + 30 + i * OPTION_ROW_HEIGHT;
       const rowLabel = this.add.text(this.panelX + 24, y - 9, row.label, { fontSize: "15px", color: "#cccccc" });
-      const stepper = addCircleStepper(this, this.panelX + PANEL_WIDTH - 90, y, {
+      const stepper = addCircleStepper(this, this.panelX + this.panelWidth - 90, y, {
         text: String(row.options[row.get()]),
         radius: 15,
         gap: 90,
@@ -155,7 +176,7 @@ export class SkirmishSettingsScene extends Phaser.Scene {
     });
 
     if (this.isLocalSkirmish) {
-      const teamSectionY = PANEL_Y + 30 + this.optionRows.length * OPTION_ROW_HEIGHT + TEAM_SECTION_GAP;
+      const teamSectionY = panelY + 30 + this.optionRows.length * OPTION_ROW_HEIGHT + TEAM_SECTION_GAP;
       this.rebuildTeamRows(teamSectionY, playerCount);
     }
   }
@@ -179,10 +200,19 @@ export class SkirmishSettingsScene extends Phaser.Scene {
     this.allianceIndices = Array.from({ length: playerCount }, (_, team) => previousAlliances[team] ?? defaultAllianceIndex(team));
 
     const colX = this.panelX + 24;
+    // Player Type/Alliance column positions are relative to panelWidth
+    // (not fixed pixel offsets like colX + 140 / colX + 320 used to be) -
+    // those were sized for the full 460px desktop panel, and on a phone
+    // where panelWidth shrinks (see create()'s PANEL_MARGIN_X clamp), the
+    // Alliance stepper's buttons would extend past the panel's actual
+    // right edge instead of shrinking to match it.
+    const typeStepperX = this.panelX + this.panelWidth * 0.40;
+    const allianceStepperX = this.panelX + this.panelWidth - 70;
+
     this.teamHeaderObjects.push(
       this.add.text(colX, startY, "Team", { fontSize: "13px", color: "#999999" }),
-      this.add.text(colX + 90, startY, "Player Type", { fontSize: "13px", color: "#999999" }),
-      this.add.text(colX + 280, startY, "Alliance", { fontSize: "13px", color: "#999999" })
+      this.add.text(typeStepperX - 40, startY, "Player Type", { fontSize: "13px", color: "#999999" }),
+      this.add.text(allianceStepperX - 33, startY, "Alliance", { fontSize: "13px", color: "#999999" })
     );
 
     for (let team = 0; team < playerCount; team++) {
@@ -192,10 +222,10 @@ export class SkirmishSettingsScene extends Phaser.Scene {
         .setStrokeStyle(2, 0xffffff, 0.4);
       this.teamRowObjects.push(swatch);
 
-      const typeStepper = addCircleStepper(this, colX + 140, y + SWATCH_SIZE / 2, {
+      const typeStepper = addCircleStepper(this, typeStepperX, y + SWATCH_SIZE / 2, {
         text: PLAYER_TYPE_OPTIONS[this.playerTypeIndices[team]].label,
         radius: 14,
-        gap: 120,
+        gap: 100,
         onPrev: (label) => {
           this.playerTypeIndices[team] = (this.playerTypeIndices[team] - 1 + PLAYER_TYPE_OPTIONS.length) % PLAYER_TYPE_OPTIONS.length;
           label.setText(PLAYER_TYPE_OPTIONS[this.playerTypeIndices[team]].label);
@@ -209,10 +239,10 @@ export class SkirmishSettingsScene extends Phaser.Scene {
       });
       this.teamRowObjects.push(typeStepper.label, typeStepper.minusButton, typeStepper.plusButton);
 
-      const allianceStepper = addCircleStepper(this, colX + 320, y + SWATCH_SIZE / 2, {
+      const allianceStepper = addCircleStepper(this, allianceStepperX, y + SWATCH_SIZE / 2, {
         text: String(ALLIANCE_OPTIONS[this.allianceIndices[team]]),
         radius: 14,
-        gap: 80,
+        gap: 60,
         onPrev: (label) => {
           this.allianceIndices[team] = Math.max(0, this.allianceIndices[team] - 1);
           label.setText(String(ALLIANCE_OPTIONS[this.allianceIndices[team]]));
@@ -251,24 +281,21 @@ export class SkirmishSettingsScene extends Phaser.Scene {
    * own screen is what actually creates the session. */
   buildFooterButtons() {
     const { width, height } = this.cameras.main;
-    const radius = 32;
+    const radius = FOOTER_BUTTON_RADIUS;
 
     if (this.isLocalSkirmish) {
       addCircleButton(this, radius + 20, height - radius - 20, radius, {
-        icon: "chevronLeft",
-        borderColor: 0xe8a33d,
+        icon: "back",
         onClick: () => this.goBack(),
       });
       this.startButton = addCircleButton(this, width - radius - 20, height - radius - 20, radius, {
-        icon: "check",
-        borderColor: 0x5ecc6a,
+        icon: "confirm",
         enabled: this.hasValidSetup(),
         onClick: () => this.startGame(),
       });
     } else {
       addCircleButton(this, width / 2, height - radius - 20, radius, {
-        icon: "chevronLeft",
-        borderColor: 0xe8a33d,
+        icon: "back",
         onClick: () => this.goBack(),
       });
     }

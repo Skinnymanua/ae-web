@@ -6,35 +6,31 @@ export const TILE_SIZE = 48;
 // canvas is guaranteed back to this size if the player ever navigates from
 // BoardScene back to a menu screen after that scene resized it to fit a map.
 export const MENU_WIDTH = 800;
-export const MENU_HEIGHT = 800;
+export const MENU_HEIGHT = 600;
 
-/** Menu-flow canvas size (see MENU_WIDTH/HEIGHT above): the fixed default,
- * shrunk to fit an actually-smaller viewport (a phone in particular) rather
- * than always rendered at the literal 800x600 regardless of screen size.
- * Only ever shrinks - a desktop window bigger than 800x600 still gets the
- * plain fixed size, unchanged from before this existed. Read at each call
- * site (main.js's boot, MenuScene/ReconnectScene's resize-on-entry) rather
- * than once, since window.innerWidth/Height can change between them (e.g.
- * a phone rotated between boot and navigating back to MenuScene). */
+/** Menu-flow canvas size: matches the viewport's OWN shape (capped for a
+ * sane desktop max) rather than forcing every device into the fixed
+ * MENU_WIDTH/HEIGHT 4:3 shape above - that approach either squished
+ * content (independent width/height clamping) or wasted most of the
+ * screen (uniform-scale "fit by width", correct proportions but a portrait
+ * phone still only gets a short landscape strip with empty space below
+ * it - see the screenshot that prompted this). A portrait phone now gets
+ * an actually-portrait canvas, and every menu-flow scene lays itself out
+ * relative to whatever this returns (see MenuScene/SkirmishSetupScene/
+ * SkirmishSettingsScene's own PANEL_WIDTH clamping and vertical-centering)
+ * instead of assuming 800x600. MENU_HEIGHT's cap only mattered for the old
+ * fixed-shape approach; MAX_MENU_HEIGHT here is deliberately taller, since
+ * a portrait phone's height is exactly the dimension that should now be
+ * used rather than discarded. Read at each call site (main.js's boot,
+ * MenuScene/ReconnectScene's resize-on-entry) rather than once, since the
+ * viewport can change between them (e.g. a phone rotated between boot and
+ * navigating back to MenuScene). */
+const MAX_MENU_HEIGHT = 900;
+
 export function getMenuSize() {
   return {
     width: Math.min(MENU_WIDTH, window.innerWidth),
-    height: Math.min(MENU_HEIGHT, window.innerHeight),
-  };
-}
-
-/** Menu-flow canvas size (see MENU_WIDTH/HEIGHT above): the fixed default,
- * shrunk to fit an actually-smaller viewport (a phone in particular) rather
- * than always rendered at the literal 800x600 regardless of screen size.
- * Only ever shrinks - a desktop window bigger than 800x600 still gets the
- * plain fixed size, unchanged from before this existed. Read at each call
- * site (main.js's boot, MenuScene/ReconnectScene's resize-on-entry) rather
- * than once, since window.innerWidth/Height can change between them (e.g.
- * a phone rotated between boot and navigating back to MenuScene). */
-export function getMenuSize() {
-  return {
-    width: Math.min(MENU_WIDTH, window.innerWidth),
-    height: Math.min(MENU_HEIGHT, window.innerHeight),
+    height: Math.min(MAX_MENU_HEIGHT, window.innerHeight),
   };
 }
 

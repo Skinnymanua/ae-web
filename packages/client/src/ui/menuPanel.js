@@ -88,17 +88,29 @@ export function addMenuButton(scene, x, y, width, height, { label, enabled = tru
 /**
  * Circular-button UI kit matching a second reference screenshot (the
  * mobile reskin's "Game Setting" screen specifically) - dark-navy circles
- * with a light blue border and a drawn chevron/check icon, a title bar
- * with a circular back button, and a corner-bracket-accented panel instead
- * of the plain uniform border above. No matching art asset exists in this
- * repo for this look either (checked circle_big.png/circle_small.png -
- * those are flat two-state toggle circles, not arrow/check buttons), so
- * this is drawn with Graphics primitives the same way drawMenuPanel above
- * already is, not wired-up sprite art.
+ * with a silver ring and a drawn icon, a title bar with a circular back
+ * button, and a corner-bracket-accented panel instead of the plain uniform
+ * border above.
+ *
+ * Circle styling and the "confirm"/"back" icons themselves are NOT a new
+ * approximation - they're the exact navy-fill/silver-ring/yellow-glyph
+ * look ui/dialogs.js's addIconButton already built for the buy menu's own
+ * Buy/Cancel and Yes/No buttons (see that file for the reference
+ * screenshot it was built from), reused here rather than invented a second
+ * time. The stepper chevrons (chevronLeft/chevronRight, used by
+ * addCircleStepper's </> pair - a different control than a confirm/back
+ * action) keep their own plain white arrow rather than adopting the
+ * yellow confirm/back glyph color, so a stepper doesn't visually read as
+ * "the same kind of button" as a screen's Back/Confirm.
  */
-export const CIRCLE_BG = 0x1c2340;
-export const CIRCLE_BORDER = 0x6f8fc9;
-export const CIRCLE_BORDER_DISABLED = 0x555566;
+export const CIRCLE_BG = 0x242b47; // matches ui/dialogs.js's addIconButton circle fill exactly (== PANEL_BG above)
+export const CIRCLE_BORDER = 0xb8bec9; // silver ring, matching addIconButton
+export const CIRCLE_BORDER_DISABLED = 0x555a66; // matching addIconButton's disabled ring
+
+const ICON_COLOR = 0xffdd44; // yellow, matching addIconButton's glyph color
+const ICON_COLOR_DISABLED = 0x77775f;
+const CHEVRON_COLOR = 0xffffff; // stepper chevrons stay plain white - see class doc above
+const CHEVRON_COLOR_DISABLED = 0x777788;
 
 function drawChevron(g, cx, cy, radius, direction, color) {
   g.lineStyle(2.5, color, 1);
@@ -109,23 +121,41 @@ function drawChevron(g, cx, cy, radius, direction, color) {
   g.strokePath();
 }
 
-function drawCheck(g, cx, cy, radius, color) {
-  g.lineStyle(3, color, 1);
+/** Checkmark - identical geometry to ui/dialogs.js's addIconButton
+ * "confirm" icon, just parameterized on radius the same way this file's
+ * other draw helpers are. */
+function drawConfirmIcon(g, cx, cy, radius, color) {
+  g.lineStyle(Math.max(2, radius * 0.22), color, 1);
   g.beginPath();
-  g.moveTo(cx - radius * 0.32, cy);
-  g.lineTo(cx - radius * 0.05, cy + radius * 0.28);
-  g.lineTo(cx + radius * 0.38, cy - radius * 0.32);
+  g.moveTo(cx - radius * 0.45, cy + radius * 0.05);
+  g.lineTo(cx - radius * 0.1, cy + radius * 0.35);
+  g.lineTo(cx + radius * 0.45, cy - radius * 0.35);
   g.strokePath();
 }
 
+/** Solid left-pointing arrow (triangle head + rectangle shaft) - identical
+ * geometry to ui/dialogs.js's addIconButton "cancel" icon. That function's
+ * own doc calls this a stand-in for the reference's curved back-arrow
+ * (Phaser Graphics has no easy primitive for that exact curve); reused
+ * here as-is rather than drawn differently a second time; screens using
+ * this for "go back" get the same glyph the buy menu's own Cancel does. */
+function drawBackIcon(g, cx, cy, radius, color) {
+  g.fillStyle(color, 1);
+  const headSize = radius * 0.35;
+  g.fillTriangle(cx - radius * 0.45, cy, cx - radius * 0.05, cy - headSize, cx - radius * 0.05, cy + headSize);
+  g.fillRect(cx - radius * 0.05, cy - radius * 0.14, radius * 0.55, radius * 0.28);
+}
+
 /**
- * One circular icon button - `icon` is "chevronLeft" | "chevronRight" |
- * "check" | "none" (a plain empty circle, for the reference's unlabeled
- * top-right button - see addTitleBar's own comment on why that one has no
- * onClick at all). Same enabled/disabled + destroy() shape as
- * addMenuButton above, for the same reasons.
+ * One circular icon button - `icon` is "chevronLeft" | "chevronRight"
+ * (plain white, for addCircleStepper's </> pair) | "confirm" | "back"
+ * (both yellow, matching ui/dialogs.js's addIconButton exactly - see this
+ * file's class doc above) | "none" (a plain empty circle, for the
+ * reference's unlabeled top-right title-bar button - see addTitleBar's own
+ * comment on why that one has no onClick at all). Same enabled/disabled +
+ * destroy() shape as addMenuButton above, for the same reasons.
  */
-export function addCircleButton(scene, x, y, radius, { icon = "none", enabled = true, onClick, borderColor = CIRCLE_BORDER } = {}) {
+export function addCircleButton(scene, x, y, radius, { icon = "none", enabled = true, onClick } = {}) {
   const g = scene.add.graphics();
   const zone = scene.add.zone(x - radius, y - radius, radius * 2, radius * 2).setOrigin(0, 0);
   if (onClick) zone.on("pointerup", () => draw.isEnabled && onClick());
@@ -135,12 +165,14 @@ export function addCircleButton(scene, x, y, radius, { icon = "none", enabled = 
     g.clear();
     g.fillStyle(CIRCLE_BG, 1);
     g.fillCircle(x, y, radius);
-    g.lineStyle(2, isEnabled ? borderColor : CIRCLE_BORDER_DISABLED, 1);
+    g.lineStyle(3, isEnabled ? CIRCLE_BORDER : CIRCLE_BORDER_DISABLED, 1);
     g.strokeCircle(x, y, radius);
-    const iconColor = isEnabled ? 0xffffff : 0x777788;
-    if (icon === "chevronLeft") drawChevron(g, x, y, radius, 1, iconColor);
-    else if (icon === "chevronRight") drawChevron(g, x, y, radius, -1, iconColor);
-    else if (icon === "check") drawCheck(g, x, y, radius, iconColor);
+
+    if (icon === "chevronLeft") drawChevron(g, x, y, radius, 1, isEnabled ? CHEVRON_COLOR : CHEVRON_COLOR_DISABLED);
+    else if (icon === "chevronRight") drawChevron(g, x, y, radius, -1, isEnabled ? CHEVRON_COLOR : CHEVRON_COLOR_DISABLED);
+    else if (icon === "confirm") drawConfirmIcon(g, x, y, radius, isEnabled ? ICON_COLOR : ICON_COLOR_DISABLED);
+    else if (icon === "back") drawBackIcon(g, x, y, radius, isEnabled ? ICON_COLOR : ICON_COLOR_DISABLED);
+
     if (onClick && isEnabled) zone.setInteractive({ useHandCursor: true });
     else zone.disableInteractive();
   }
