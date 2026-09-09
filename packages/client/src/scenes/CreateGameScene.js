@@ -4,7 +4,7 @@ import { GameSocket } from "../net/socket.js";
 import { saveActiveSession } from "../net/sessionPersistence.js";
 import { createTextInput } from "../ui/textInput.js";
 import { SERVER_WS_URL } from "../constants.js";
-import { drawMenuPanel, addMenuButton } from "../ui/menuPanel.js";
+import { drawCornerBracketPanel, addTitleBar, addMenuButton, addCircleButton } from "../ui/menuPanel.js";
 import { createScrollList } from "../ui/scrollList.js";
 import {
   MAX_LEVEL_OPTIONS,
@@ -19,10 +19,11 @@ import {
 
 const COLUMN_WIDTH = 360;
 const COLUMN_HEIGHT = 340;
-const COLUMN_Y = 64;
+const COLUMN_Y = 96;
 const LEFT_COLUMN_X = 24;
 const RIGHT_COLUMN_X = 404;
 const COLUMN_PADDING = 16;
+const TITLE_BAR_HEIGHT = 44;
 
 /**
  * Networked game creation: same map + settings pattern as
@@ -34,14 +35,17 @@ const COLUMN_PADDING = 16;
  * On success, connects to the server, creates the session, and lands in
  * NetworkLobbyScene to wait for the rest of the players.
  *
- * Styled with the same navy-panel treatment as MenuScene.js/
- * SkirmishSetupScene.js (see ui/menuPanel.js) - reached from the main
- * menu's Multiplayer submenu, so it should read as part of the same visual
- * flow. Map list uses the same scrollable component as SkirmishSetupScene
- * (ui/scrollList.js), for the same reason: it can grow past the panel's
- * fixed height as more maps get added. Session name/password stay real
- * HTML text inputs (ui/textInput.js), not beveled buttons - a different
- * control entirely.
+ * Restyled with the circular-button kit (ui/menuPanel.js's addTitleBar/
+ * drawCornerBracketPanel/addCircleButton), matching the Skirmish flow's own
+ * redesign - kept as ONE screen (map + settings summary side by side)
+ * rather than split into two steps the way SkirmishSetupScene/
+ * SkirmishSettingsScene are, since the deeper "Settings" step already
+ * lives on its own screen via #openSettings and splitting further would
+ * touch the session-creation flow itself, not just its look. Map list uses
+ * the same scrollable component as SkirmishSetupScene (ui/scrollList.js),
+ * for the same reason: it can grow past the panel's fixed height as more
+ * maps get added. Session name/password stay real HTML text inputs
+ * (ui/textInput.js), not beveled buttons - a different control entirely.
  */
 export class CreateGameScene extends Phaser.Scene {
   constructor() {
@@ -60,11 +64,15 @@ export class CreateGameScene extends Phaser.Scene {
 
   create() {
     const { width, height } = this.cameras.main;
-    this.add.rectangle(0, 0, width, height, 0x222222).setOrigin(0, 0);
+    this.add.rectangle(0, 0, width, height, 0x1a1a1a).setOrigin(0, 0);
 
-    this.add
-      .text(width / 2, 24, "Create Game", { fontSize: "26px", color: "#e8e8e8", fontStyle: "bold" })
-      .setOrigin(0.5, 0);
+    const totalWidth = RIGHT_COLUMN_X + COLUMN_WIDTH - LEFT_COLUMN_X;
+    const titleBarX = width / 2 - totalWidth / 2;
+
+    addTitleBar(this, titleBarX, 24, totalWidth, TITLE_BAR_HEIGHT, {
+      title: "Create Game",
+      onBack: () => this.scene.start("NetworkMenuScene"),
+    });
 
     // Footer first - buildMapList's scroll list restores the previously
     // selected map (if any) by calling select(), which fires onSelect and
@@ -75,7 +83,7 @@ export class CreateGameScene extends Phaser.Scene {
   }
 
   buildMapList() {
-    drawMenuPanel(this, LEFT_COLUMN_X, COLUMN_Y, COLUMN_WIDTH, COLUMN_HEIGHT);
+    drawCornerBracketPanel(this, LEFT_COLUMN_X, COLUMN_Y, COLUMN_WIDTH, COLUMN_HEIGHT);
 
     const startX = LEFT_COLUMN_X + COLUMN_PADDING;
     const labelY = COLUMN_Y + COLUMN_PADDING;
@@ -120,7 +128,7 @@ export class CreateGameScene extends Phaser.Scene {
   }
 
   buildSettingsSummary() {
-    drawMenuPanel(this, RIGHT_COLUMN_X, COLUMN_Y, COLUMN_WIDTH, COLUMN_HEIGHT);
+    drawCornerBracketPanel(this, RIGHT_COLUMN_X, COLUMN_Y, COLUMN_WIDTH, COLUMN_HEIGHT);
 
     const startX = RIGHT_COLUMN_X + COLUMN_PADDING;
     const labelY = COLUMN_Y + COLUMN_PADDING;
@@ -169,10 +177,10 @@ export class CreateGameScene extends Phaser.Scene {
   }
 
   buildSessionFields(startX, startY, fieldWidth) {
-    this.nameInput = createTextInput(this, startX - 20 , startY + 182, { placeholder: "Session name", width: fieldWidth });
+    this.nameInput = createTextInput(this, startX - 20, startY + 182, { placeholder: "Session name", width: fieldWidth });
     this.nameInput.setValue(this.sessionNameValue);
 
-    this.passwordInput = createTextInput(this, startX - 20 , startY + 220, {
+    this.passwordInput = createTextInput(this, startX - 20, startY + 220, {
       placeholder: "Password (optional)",
       password: true,
       width: fieldWidth,
@@ -182,21 +190,19 @@ export class CreateGameScene extends Phaser.Scene {
 
   buildFooter() {
     const { width, height } = this.cameras.main;
-    const buttonWidth = 160;
-    const buttonHeight = 42;
-    const gap = 16;
+    const radius = 32;
 
     this.statusText = this.add.text(width / 2, height - 92, "", { fontSize: "13px", color: "#ff8888" }).setOrigin(0.5);
 
-    this.createButton = addMenuButton(this, width / 2 - buttonWidth - gap / 2, height - 60, buttonWidth, buttonHeight, {
-      label: "Create",
-      enabled: !!this.selectedMapId,
-      onClick: () => this.createGame(),
+    addCircleButton(this, radius + 20, height - radius - 20, radius, {
+      icon: "back",
+      onClick: () => this.scene.start("NetworkMenuScene"),
     });
 
-    addMenuButton(this, width / 2 + gap / 2, height - 60, buttonWidth, buttonHeight, {
-      label: "Back",
-      onClick: () => this.scene.start("NetworkMenuScene"),
+    this.createButton = addCircleButton(this, width - radius - 20, height - radius - 20, radius, {
+      icon: "confirm",
+      enabled: !!this.selectedMapId,
+      onClick: () => this.createGame(),
     });
   }
 

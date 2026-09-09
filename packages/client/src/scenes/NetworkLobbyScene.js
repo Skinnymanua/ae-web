@@ -1,9 +1,11 @@
 import Phaser from "phaser";
 import { TEAM_COLOR } from "../constants.js";
-import { drawMenuPanel, addMenuButton } from "../ui/menuPanel.js";
+import { drawCornerBracketPanel, addTitleBar, addCircleButton } from "../ui/menuPanel.js";
 import { clearActiveSession } from "../net/sessionPersistence.js";
 
 const PANEL_WIDTH = 340;
+const PANEL_Y = 96;
+const TITLE_BAR_HEIGHT = 44;
 
 /**
  * Holding screen after creating or joining a networked session - shows who's
@@ -14,10 +16,13 @@ const PANEL_WIDTH = 340;
  * server/src/index.js), so both clients transition into BoardScene
  * together regardless of who clicked it.
  *
- * Styled with the same navy-panel treatment as the rest of this project's
- * menus (see ui/menuPanel.js) - reached from both CreateGameScene and
- * JoinGameScene, so it should read as part of the same visual flow either
- * way you got here.
+ * Restyled with the circular-button kit (ui/menuPanel.js's addTitleBar/
+ * drawCornerBracketPanel/addCircleButton), matching the Skirmish flow's own
+ * redesign - reached from both CreateGameScene and JoinGameScene, so it
+ * should look like the same design language either way you got here. The
+ * title bar's own back button and the big circular one both "Leave" here
+ * (same reasoning as SkirmishSetupScene's redundant Back pair) - there's
+ * nothing else a "back" action from this screen could mean.
  */
 export class NetworkLobbyScene extends Phaser.Scene {
   constructor() {
@@ -33,21 +38,22 @@ export class NetworkLobbyScene extends Phaser.Scene {
 
   create() {
     const { width, height } = this.cameras.main;
-    this.add.rectangle(0, 0, width, height, 0x222222).setOrigin(0, 0);
-
-    this.add
-      .text(width / 2, 40, this.session.name, { fontSize: "26px", color: "#e8e8e8", fontStyle: "bold" })
-      .setOrigin(0.5);
+    this.add.rectangle(0, 0, width, height, 0x1a1a1a).setOrigin(0, 0);
 
     const panelX = width / 2 - PANEL_WIDTH / 2;
-    const panelY = 90;
-    drawMenuPanel(this, panelX, panelY, PANEL_WIDTH, 130);
+
+    addTitleBar(this, panelX, 24, PANEL_WIDTH, TITLE_BAR_HEIGHT, {
+      title: this.session.name,
+      onBack: () => this.leave(),
+    });
+
+    drawCornerBracketPanel(this, panelX, PANEL_Y, PANEL_WIDTH, 130);
 
     this.add
-      .text(width / 2, panelY + 24, `Map: ${this.session.mapId}`, { fontSize: "14px", color: "#cccccc" })
+      .text(width / 2, PANEL_Y + 24, `Map: ${this.session.mapId}`, { fontSize: "14px", color: "#cccccc" })
       .setOrigin(0.5);
     this.add
-      .text(width / 2, panelY + 48, `You are Team ${this.team}`, {
+      .text(width / 2, PANEL_Y + 48, `You are Team ${this.team}`, {
         fontSize: "16px",
         // Same 4-color palette the bottom bar uses (see constants.js's
         // TEAM_COLOR) instead of a hardcoded blue/orange binary choice -
@@ -57,13 +63,7 @@ export class NetworkLobbyScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    this.statusText = this.add.text(width / 2, panelY + 90, "", { fontSize: "14px", color: "#44dd88" }).setOrigin(0.5);
-
-    this.startButton = addMenuButton(this, width / 2 - 90, panelY + 160, 180, 44, {
-      label: "Start Game",
-      enabled: false,
-      onClick: () => this.socket.send("start_game"),
-    });
+    this.statusText = this.add.text(width / 2, PANEL_Y + 90, "", { fontSize: "14px", color: "#44dd88" }).setOrigin(0.5);
 
     this.updateStatus(this.session.connectedPlayerCount);
 
@@ -82,12 +82,25 @@ export class NetworkLobbyScene extends Phaser.Scene {
     // the session, sender included.
     this.unsubStarted = this.socket.on("game_started", () => this.startGame());
 
-    addMenuButton(this, width / 2 - 80, height - 60, 160, 42, {
-      label: "Leave",
+    this.buildFooterButtons();
+
+    this.events.on("shutdown", () => this.cleanupListeners());
+  }
+
+  buildFooterButtons() {
+    const { width, height } = this.cameras.main;
+    const radius = 32;
+
+    addCircleButton(this, radius + 20, height - radius - 20, radius, {
+      icon: "back",
       onClick: () => this.leave(),
     });
 
-    this.events.on("shutdown", () => this.cleanupListeners());
+    this.startButton = addCircleButton(this, width - radius - 20, height - radius - 20, radius, {
+      icon: "confirm",
+      enabled: false,
+      onClick: () => this.socket.send("start_game"),
+    });
   }
 
   updateStatus(playerCount) {
