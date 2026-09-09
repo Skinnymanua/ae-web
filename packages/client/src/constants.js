@@ -27,10 +27,28 @@ export const MENU_HEIGHT = 600;
  * navigating back to MenuScene). */
 const MAX_MENU_HEIGHT = 900;
 
-export function getMenuSize() {
+/** window.innerHeight/innerWidth aren't reliable on mobile Safari - they're
+ * measured at whatever instant JS happens to read them, but Safari's own
+ * address bar/toolbar chrome can expand or collapse AFTER that, shrinking
+ * the actually-visible area below what a canvas was already sized for
+ * (this is what left BoardScene's bottom bar pushed off-screen on a real
+ * phone, with no way to scroll to it - see BoardScene's own MAX_VIEWPORT_
+ * WIDTH/HEIGHT). window.visualViewport (supported in every current mobile
+ * browser) reports the actual visible area instead, chrome and all -
+ * falls back to innerWidth/innerHeight on the rare browser without it. */
+export function getVisibleViewportSize() {
+  const vv = window.visualViewport;
   return {
-    width: Math.min(MENU_WIDTH, window.innerWidth),
-    height: Math.min(MAX_MENU_HEIGHT, window.innerHeight),
+    width: vv?.width ?? window.innerWidth,
+    height: vv?.height ?? window.innerHeight,
+  };
+}
+
+export function getMenuSize() {
+  const { width, height } = getVisibleViewportSize();
+  return {
+    width: Math.min(MENU_WIDTH, width),
+    height: Math.min(MAX_MENU_HEIGHT, height),
   };
 }
 

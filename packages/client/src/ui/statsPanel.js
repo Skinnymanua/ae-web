@@ -29,15 +29,15 @@ import {
 
 const BAR_HEIGHT = BOARD_OFFSET_Y;
 const ROW_HEIGHT = 34;
-const PORTRAIT_SIZE = 92;
+const PORTRAIT_SIZE = 90;
 // Scaled up roughly 1.4x across the board (badge/icon/pill/font all
 // together) - see constants.js's BOARD_OFFSET_Y for the matching bump to
 // BAR_HEIGHT itself, which this whole panel's height derives from.
 const BADGE_RADIUS = 15;
-const ICON_SIZE = 30;
-const PILL_WIDTH = 200;
+const ICON_SIZE = 24;
+const PILL_WIDTH = 100;
 const PILL_HEIGHT = 30;
-const STAT_FONT_SIZE = "20px";
+const STAT_FONT_SIZE = "17px";
 const PILL_TEXT_PADDING = 10;
 
 const CELL_BG = 0x232838;
@@ -51,7 +51,7 @@ const BADGE_FILL = 0x0a0a0a;
 const BADGE_RING = 0x5b93ab;
 
 
-function addStatRow(scene, container, graphics, x, y, iconSheet, iconFrame, align, flipY = false) {
+function addStatRow(scene, container, graphics, x, y, iconSheet, iconFrame, align, pillWidth, flipY = false) {
   const badgeX = align === "left" ? x + BADGE_RADIUS : x - BADGE_RADIUS;
   const badgeY = y + PILL_HEIGHT / 2;
 
@@ -62,9 +62,9 @@ function addStatRow(scene, container, graphics, x, y, iconSheet, iconFrame, alig
   // the far end. Drawn BEFORE the badge circle/ring below, so the badge
   // paints on top of the pill wherever they overlap - draw order is
   // z-order within a single Graphics object, same as any canvas API.
-  const pillX = align === "left" ? x : x - PILL_WIDTH;
+  const pillX = align === "left" ? x : x - pillWidth;
   graphics.fillStyle(PILL_BG, 1);
-  graphics.fillRoundedRect(pillX, y, PILL_WIDTH, PILL_HEIGHT, 6);
+  graphics.fillRoundedRect(pillX, y, pillWidth, PILL_HEIGHT, 6);
 
   graphics.fillStyle(BADGE_FILL, 1);
   graphics.fillCircle(badgeX, badgeY, BADGE_RADIUS);
@@ -84,7 +84,7 @@ function addStatRow(scene, container, graphics, x, y, iconSheet, iconFrame, alig
   const text =
     align === "left"
       ? scene.add
-          .text(pillX + PILL_WIDTH - PILL_TEXT_PADDING, y + PILL_HEIGHT / 2, "-", { fontSize: STAT_FONT_SIZE, color: "#ffffff" })
+          .text(pillX + pillWidth - PILL_TEXT_PADDING, y + PILL_HEIGHT / 2, "-", { fontSize: STAT_FONT_SIZE, color: "#ffffff" })
           .setOrigin(1, 0.5)
       : scene.add
           .text(pillX + PILL_TEXT_PADDING, y + PILL_HEIGHT / 2, "-", { fontSize: STAT_FONT_SIZE, color: "#ffffff" })
@@ -125,15 +125,25 @@ export function createStatsPanel(scene) {
   const rightX = barWidth - 14;
   let rowY = 8;
 
+  // Clamped down from PILL_WIDTH when there isn't enough room between the
+  // panel edge and the portrait to fit it - on a narrow phone, PILL_WIDTH
+  // (sized for the bigger desktop bar) could otherwise extend the pill
+  // right over the portrait, both sides at once, which is exactly the
+  // overlapping/garbled text a real device screenshot showed. Never
+  // upscaled past PILL_WIDTH itself - a wide desktop bar keeps the
+  // original size.
+  const sideSpan = centerX - PORTRAIT_SIZE / 2 - leftX - BADGE_RADIUS * 2 - 4;
+  const pillWidth = Math.max(30, Math.min(PILL_WIDTH, sideSpan));
+
   const texts = {};
-  texts.hp = addStatRow(scene, container, g, leftX, rowY, "icons_action", STAT_ICON.HP, "left");
-  texts.xp = addStatRow(scene, container, g, rightX, rowY, "icons_hud_battle", HUD_ICON.LEVEL, "right", true);
+  texts.hp = addStatRow(scene, container, g, leftX, rowY, "icons_action", STAT_ICON.HP, "left", pillWidth);
+  texts.xp = addStatRow(scene, container, g, rightX, rowY, "icons_hud_battle", HUD_ICON.LEVEL, "right", pillWidth, true);
   rowY += ROW_HEIGHT;
-  texts.attack = addStatRow(scene, container, g, leftX, rowY, "icons_hud_battle", HUD_ICON.ATTACK, "left");
-  texts.mdef = addStatRow(scene, container, g, rightX, rowY, "icons_action", STAT_ICON.MDEF, "right");
+  texts.attack = addStatRow(scene, container, g, leftX, rowY, "icons_hud_battle", HUD_ICON.ATTACK, "left", pillWidth);
+  texts.mdef = addStatRow(scene, container, g, rightX, rowY, "icons_action", STAT_ICON.MDEF, "right", pillWidth);
   rowY += ROW_HEIGHT;
-  texts.pdef = addStatRow(scene, container, g, leftX, rowY, "icons_hud_battle", HUD_ICON.PDEF, "left");
-  texts.move = addStatRow(scene, container, g, rightX, rowY, "icons_action", STAT_ICON.MOVE, "right");
+  texts.pdef = addStatRow(scene, container, g, leftX, rowY, "icons_hud_battle", HUD_ICON.PDEF, "left", pillWidth);
+  texts.move = addStatRow(scene, container, g, rightX, rowY, "icons_action", STAT_ICON.MOVE, "right", pillWidth);
 
   container.setVisible(false);
   container.setScrollFactor(0);

@@ -5,7 +5,7 @@ import unitsData from "@ae/shared/data/units.json";
 import tilesData from "@ae/shared/data/tiles.json";
 import { MAPS } from "../maps/index.js";
 import { PLAYER_TYPE_OPTIONS, ALLIANCE_OPTIONS } from "./skirmishSettings.js";
-import { TILE_SIZE, BOARD_OFFSET_Y } from "../constants.js";
+import { TILE_SIZE, BOARD_OFFSET_Y, getVisibleViewportSize } from "../constants.js";
 import { BOTTOM_BAR_HEIGHT } from "../ui/bottomBar.js";
 import { deserializeGameState } from "../net/deserializeGameState.js";
 import { setupNetworkedGameSync } from "../net/runGameAction.js";
@@ -201,18 +201,16 @@ export class BoardScene extends Phaser.Scene {
     // sample-map.json at 480x480 inside an 800x600 canvas) or forcing scroll
     // for any map bigger. Capped so an unusually large map still scrolls via
     // input/cameraDrag.js instead of producing an oversized browser window.
-    // Capped to the actual viewport too, not just a fixed desktop-sized
-    // ceiling - without this, a phone whose visible height is shorter than
-    // 700px could get a canvas taller than what's actually on screen (mode:
-    // NONE applies no CSS scaling to bring it back down), silently pushing
-    // anything anchored near the bottom of the canvas - ui/dialogs.js's
-    // buy-menu Buy/Cancel buttons, in particular - off the visible area
-    // entirely. The board's own existing drag-to-pan (render/camera.js)
-    // already handles a map whose CONTENT is taller than what's visible;
-    // this just guarantees the canvas itself - and everything anchored to
-    // its edges - never exceeds the actual screen.
-    const MAX_VIEWPORT_WIDTH = Math.min(1000, window.innerWidth);
-    const MAX_VIEWPORT_HEIGHT = Math.min(700, window.innerHeight);
+    // Capped to the actual VISIBLE viewport (see constants.js's
+    // getVisibleViewportSize) - window.innerWidth/Height alone aren't
+    // reliable on mobile Safari, since its toolbar chrome can expand or
+    // collapse after this reads, shrinking the real visible area below
+    // what the canvas already got sized for and pushing anything anchored
+    // to the bottom edge (the bottom bar, in particular) off-screen with
+    // no way to scroll back to it.
+    const { width: visibleWidth, height: visibleHeight } = getVisibleViewportSize();
+    const MAX_VIEWPORT_WIDTH = Math.min(1000, visibleWidth);
+    const MAX_VIEWPORT_HEIGHT = Math.min(700, visibleHeight);
     const targetWidth = Math.min(boardWidth * TILE_SIZE, MAX_VIEWPORT_WIDTH);
     const targetHeight = Math.min(BOARD_OFFSET_Y + boardHeight * TILE_SIZE + BOTTOM_BAR_HEIGHT, MAX_VIEWPORT_HEIGHT);
     this.scale.resize(targetWidth, targetHeight);
