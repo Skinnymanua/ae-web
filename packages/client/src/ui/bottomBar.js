@@ -139,7 +139,15 @@ export function createBottomBar(scene) {
 
   // --- population (icons_hud_status frame 0 — StatusBarRenderer's population icon,
   // shown as a "current/max" fraction, same as the original's drawLFraction) ---
-  const popX = 190;
+  // popX/goldX are fractions of zoneX (the space actually left before the End
+  // Turn zone), not fixed pixel offsets - those were sized assuming an
+  // 800px-wide bar and, on a narrow phone (zoneX = barWidth - 100 can end up
+  // smaller than the old fixed goldX=280 outright), drew the gold icon/text
+  // directly on top of the End Turn label instead of before it. The ratios
+  // below (190/700, 280/700) reproduce the exact original 800px-bar
+  // positions when zoneX is 700, and scale down proportionally - and safely,
+  // since 0.4 < 1.0 - for any narrower bar.
+  const popX = zoneX * (290 / 700);
   const popIcon = scene.add.image(popX, BAR_HEIGHT / 2, "icons_hud_status", 0);
   popIcon.setDisplaySize(20, 20);
   container.add(popIcon);
@@ -149,7 +157,7 @@ export function createBottomBar(scene) {
   container.add(popText);
 
   // --- gold (icons_hud_status frame 1 — the ported StatusBarRenderer gold coin) ---
-  const goldX = 280;
+  const goldX = zoneX * (500 / 700);
   const goldIcon = scene.add.image(goldX, BAR_HEIGHT / 2, "icons_hud_status", 1);
   goldIcon.setDisplaySize(20, 20);
   container.add(goldIcon);

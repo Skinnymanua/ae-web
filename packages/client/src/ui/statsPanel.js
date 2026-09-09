@@ -28,17 +28,17 @@ import {
 } from "@ae/shared/src/combat-resolution.js";
 
 const BAR_HEIGHT = BOARD_OFFSET_Y;
-const ROW_HEIGHT = 24;
-const PORTRAIT_SIZE = 64;
-// Modestly bigger than before (was 10/14/20) to read closer to the reference
-// screenshot's much larger badges - bounded by ROW_HEIGHT/BAR_HEIGHT though,
-// which this port keeps compact (76px total for all 3 rows) rather than the
-// screenshot's much taller phone-scaled bar; a full match would need
-// restructuring BAR_HEIGHT itself; not done here.
-const BADGE_RADIUS = 11;
-const ICON_SIZE = 17;
-const PILL_WIDTH = 74;
-const PILL_HEIGHT = 22;
+const ROW_HEIGHT = 34;
+const PORTRAIT_SIZE = 92;
+// Scaled up roughly 1.4x across the board (badge/icon/pill/font all
+// together) - see constants.js's BOARD_OFFSET_Y for the matching bump to
+// BAR_HEIGHT itself, which this whole panel's height derives from.
+const BADGE_RADIUS = 15;
+const ICON_SIZE = 30;
+const PILL_WIDTH = 200;
+const PILL_HEIGHT = 30;
+const STAT_FONT_SIZE = "20px";
+const PILL_TEXT_PADDING = 10;
 
 const CELL_BG = 0x232838;
 const PILL_BG = 0x3a4258;
@@ -54,25 +54,41 @@ const BADGE_RING = 0x5b93ab;
 function addStatRow(scene, container, graphics, x, y, iconSheet, iconFrame, align, flipY = false) {
   const badgeX = align === "left" ? x + BADGE_RADIUS : x - BADGE_RADIUS;
   const badgeY = y + PILL_HEIGHT / 2;
+
+  // Pill drawn so its near edge sits UNDER the badge (not flush against it) -
+  // "left" align starts the pill at x itself (the badge's own left edge),
+  // so the badge center (x + BADGE_RADIUS) lands inside the pill's span
+  // instead of just touching its border. "right" align mirrors that off
+  // the far end. Drawn BEFORE the badge circle/ring below, so the badge
+  // paints on top of the pill wherever they overlap - draw order is
+  // z-order within a single Graphics object, same as any canvas API.
+  const pillX = align === "left" ? x : x - PILL_WIDTH;
+  graphics.fillStyle(PILL_BG, 1);
+  graphics.fillRoundedRect(pillX, y, PILL_WIDTH, PILL_HEIGHT, 6);
+
   graphics.fillStyle(BADGE_FILL, 1);
   graphics.fillCircle(badgeX, badgeY, BADGE_RADIUS);
   graphics.lineStyle(2, BADGE_RING, 1);
   graphics.strokeCircle(badgeX, badgeY, BADGE_RADIUS);
-
-  const pillX = align === "left" ? x + BADGE_RADIUS : x - BADGE_RADIUS - PILL_WIDTH;
-  graphics.fillStyle(PILL_BG, 1);
-  graphics.fillRoundedRect(pillX, y, PILL_WIDTH, PILL_HEIGHT, 6);
 
   const icon = scene.add.image(badgeX, badgeY, iconSheet, iconFrame);
   icon.setDisplaySize(ICON_SIZE, ICON_SIZE);
   icon.setFlipY(flipY);
   container.add(icon);
 
-  const text = scene.add.text(pillX + PILL_WIDTH - 8, y + PILL_HEIGHT / 2, "-", {
-    fontSize: "13px",
-    color: "#ffffff",
-  });
-  text.setOrigin(1, 0.5);
+  // Anchored to whichever end of the pill is AWAY from the badge, not
+  // "the right edge" unconditionally - now that the badge overlaps the
+  // pill's near end (see above), a right-aligned row's number needs to
+  // sit at the pill's LEFT end instead, or it'd render underneath the
+  // badge the same way the pill itself does.
+  const text =
+    align === "left"
+      ? scene.add
+          .text(pillX + PILL_WIDTH - PILL_TEXT_PADDING, y + PILL_HEIGHT / 2, "-", { fontSize: STAT_FONT_SIZE, color: "#ffffff" })
+          .setOrigin(1, 0.5)
+      : scene.add
+          .text(pillX + PILL_TEXT_PADDING, y + PILL_HEIGHT / 2, "-", { fontSize: STAT_FONT_SIZE, color: "#ffffff" })
+          .setOrigin(0, 0.5);
   container.add(text);
   return text;
 }
@@ -91,22 +107,23 @@ export function createStatsPanel(scene) {
   container.add(g);
 
   const centerX = barWidth / 2;
-  const cellGap = 6;
-  const cellPad = 4;
-  const leftCellRight = centerX - PORTRAIT_SIZE / 2 - cellGap;
-  const rightCellLeft = centerX + PORTRAIT_SIZE / 2 + cellGap;
+  const cellPad = 6;
 
+  // One continuous background spanning the whole bar, not three separate
+  // boxes with visible gaps between them - the portrait still gets its own
+  // distinct (darker, bordered) inset on top of this, but the left/right
+  // stat areas now read as one connected panel instead of two floating
+  // islands either side of it.
   g.fillStyle(CELL_BG, 1);
-  g.fillRoundedRect(cellPad, cellPad, leftCellRight - cellPad, BAR_HEIGHT - cellPad * 2, 8);
-  g.fillRoundedRect(rightCellLeft, cellPad, barWidth - cellPad - rightCellLeft, BAR_HEIGHT - cellPad * 2, 8);
+  g.fillRoundedRect(cellPad, cellPad, barWidth - cellPad * 2, BAR_HEIGHT - cellPad * 2, 8);
   g.fillStyle(0x14161f, 1);
   g.fillRoundedRect(centerX - PORTRAIT_SIZE / 2, cellPad, PORTRAIT_SIZE, BAR_HEIGHT - cellPad * 2, 8);
   g.lineStyle(2, 0xffffff, 0.6);
   g.strokeRoundedRect(centerX - PORTRAIT_SIZE / 2, cellPad, PORTRAIT_SIZE, BAR_HEIGHT - cellPad * 2, 8);
 
-  const leftX = 10;
-  const rightX = barWidth - 10;
-  let rowY = 6;
+  const leftX = 14;
+  const rightX = barWidth - 14;
+  let rowY = 8;
 
   const texts = {};
   texts.hp = addStatRow(scene, container, g, leftX, rowY, "icons_action", STAT_ICON.HP, "left");

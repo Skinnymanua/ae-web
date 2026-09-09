@@ -41,7 +41,7 @@ export const SERVER_WS_URL = import.meta.env?.VITE_SERVER_WS_URL ?? "ws://localh
 
 // Height of the top stats bar (see ui/statsPanel.js) — the board is drawn shifted
 // down by this much so the bar sits in its own space above the map, not overlapping it.
-export const BOARD_OFFSET_Y = 76;
+export const BOARD_OFFSET_Y = 118;
 
 // Frame indices within icons_action.png (128x16 = 8 frames of 16x16),
 // matching ResourceManager#getActionIcon usage in the original's ActionButtonBar.java.
