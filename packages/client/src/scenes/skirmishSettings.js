@@ -35,7 +35,7 @@ export const ALLIANCE_OPTIONS = [1, 2, 3, 4];
  * vs however many bots" default whenever the team rows haven't been set
  * up before (fresh entry, or player count just increased). */
 export function defaultPlayerTypeIndex(team) {
-  return team === 0 ? 0 : 1; // Player for team 0, Robot for everyone else
+  return team === 0 ? 0 : 2; // Player for team 0, None for every other slot until manually turned on
 }
 
 export function defaultAllianceIndex(team) {

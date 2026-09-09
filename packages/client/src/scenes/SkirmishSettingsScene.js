@@ -147,16 +147,24 @@ export class SkirmishSettingsScene extends Phaser.Scene {
         get: () => this.unitCapacityIndex,
         set: (i) => (this.unitCapacityIndex = i),
       },
-      {
+    ];
+    // Local skirmish always shows all 4 team-row slots now (see
+    // redrawPanel's fixed playerCount below) - which team/robot/none each
+    // slot IS is controlled per-row instead, so there's nothing left for a
+    // separate "Players" count stepper to do here. Only the networked
+    // reuse (CreateGameScene) still needs it - that flow has no per-team
+    // rows at all, so a real slot-count control is the only way it has to
+    // say how many can join.
+    if (!this.isLocalSkirmish) {
+      this.optionRows.push({
         label: "Players",
         options: PLAYER_COUNT_OPTIONS,
         get: () => this.playerCountIndex,
         set: (i) => {
           this.playerCountIndex = i;
-          this.redrawPanel(); // team-row count depends on this - see rebuildTeamRows
         },
-      },
-    ];
+      });
+    }
 
     this.panelGraphics = null;
     this.teamHeaderObjects = [];
@@ -180,7 +188,11 @@ export class SkirmishSettingsScene extends Phaser.Scene {
     this.optionRowObjects = [];
 
     const { height } = this.cameras.main;
-    const playerCount = PLAYER_COUNT_OPTIONS[this.playerCountIndex];
+    // Always 4 for local skirmish now (see class doc + the optionRows
+    // comment above) - every slot renders, defaulting to None until its
+    // own Player Type stepper turns it into something. The networked reuse
+    // still goes through the Players option row above instead.
+    const playerCount = this.isLocalSkirmish ? 4 : PLAYER_COUNT_OPTIONS[this.playerCountIndex];
     const teamSectionHeight = this.isLocalSkirmish ? TEAM_SECTION_GAP + 24 + playerCount * TEAM_ROW_HEIGHT : 0;
     const panelHeight = 30 + this.optionRows.length * OPTION_ROW_HEIGHT + teamSectionHeight + 20;
 
@@ -385,7 +397,11 @@ export class SkirmishSettingsScene extends Phaser.Scene {
       maxLevel: MAX_LEVEL_OPTIONS[this.maxLevelIndex],
       startingGold: STARTING_GOLD_OPTIONS[this.startingGoldIndex],
       unitCapacity: UNIT_CAPACITY_OPTIONS[this.unitCapacityIndex],
-      playerCount: PLAYER_COUNT_OPTIONS[this.playerCountIndex],
+      // Always 4 for local skirmish (see redrawPanel's own comment) -
+      // BoardScene builds one players[] entry per slot regardless, and
+      // turn.js's isTeamAlive already treats a None slot as not alive, so
+      // an unused 4th slot costs nothing at runtime.
+      playerCount: 4,
       // Per-team Player/Robot/Alliance config from the rows above - see
       // BoardScene#init for the "everyone human, own alliance" fallback,
       // which no longer applies in practice for the local flow (this

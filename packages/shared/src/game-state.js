@@ -84,6 +84,14 @@ export function instantiateUnit(unitDef, { team, x, y, id }) {
     unitIndex: unitDef.index,
     unitCode: unitDef.unitCode ?? `unit-${unitDef.index}`,
     team,
+    // Frame index into heads.png (see render/units.js's head overlay,
+    // drawn only for isCommander units) - team index doubles as frame
+    // index directly, matching ui/scenes/SkirmishSettingsScene.js's team
+    // rows: 0 (blue) and 2 (green) are plain human faces, 1 (magenta/
+    // "red") and 3 (navy/"black") are the grey helmed/skull-like ones.
+    // Set unconditionally (not just for commanders) since it's simplest to
+    // always carry - non-commander units never read it at all.
+    head: team,
     x,
     y,
     level: 0,

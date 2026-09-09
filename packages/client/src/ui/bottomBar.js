@@ -59,7 +59,15 @@ export function createBottomBar(scene) {
     .setInteractive();
   container.add(bg);
   bg.on("pointerdown", () => {
-    if (scene.modalOpen || scene.animating || scene.actionBarOpen) return;
+    // Same isMyTurn convention as input/boardInput.js's own move/attack
+    // gating - true for local skirmish (no scene.net_ at all, so always
+    // "your" turn from this client's perspective) and for a networked game
+    // only when it's actually this connected player's team's turn, not an
+    // opponent's. Without this, End Turn was clickable during an
+    // opponent's networked turn - scene.animating only ever covered a
+    // Robot team's turn (see net/robotDriver.js), never this case.
+    const isMyTurn = !scene.net_ || scene.net_.team === scene.game_.currentTeam;
+    if (!isMyTurn || scene.modalOpen || scene.animating || scene.actionBarOpen) return;
     showConfirm(scene, "End your turn?", async () => {
       scene.animating = true;
       const result = await runGameAction(scene, "endTurn");
