@@ -35,10 +35,10 @@ const PORTRAIT_SIZE = 90;
 // BAR_HEIGHT itself, which this whole panel's height derives from.
 const BADGE_RADIUS = 15;
 const ICON_SIZE = 24;
-const PILL_WIDTH = 100;
+const PILL_WIDTH = 150;
 const PILL_HEIGHT = 30;
-const STAT_FONT_SIZE = "17px";
-const PILL_TEXT_PADDING = 10;
+const STAT_FONT_SIZE = "20px";
+const PILL_TEXT_PADDING = 0;
 
 const CELL_BG = 0x232838;
 const PILL_BG = 0x3a4258;
