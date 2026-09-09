@@ -1,7 +1,6 @@
 import Phaser from "phaser";
 import { MAPS } from "../maps/index.js";
-import { TEAM_COLOR } from "../constants.js";
-import { drawCornerBracketPanel, addTitleBar, addCircleButton, addCircleStepper } from "../ui/menuPanel.js";
+import { drawCornerBracketPanel, addTitleBar, addCircleButton, addCircleStepper, CIRCLE_BG, CIRCLE_BORDER } from "../ui/menuPanel.js";
 import {
   MAX_LEVEL_OPTIONS,
   STARTING_GOLD_OPTIONS,
@@ -23,7 +22,20 @@ const OPTION_ROW_HEIGHT = 40;
 const TEAM_ROW_HEIGHT = 50;
 const TEAM_SECTION_GAP = 16; // between the last option row and the first team row
 const TITLE_BAR_HEIGHT = 44;
-const SWATCH_SIZE = 28;
+const SWATCH_SIZE = 36; // bumped up from 28 - now showing a full body+head composite, not just a small head icon, needs more room to read clearly
+const HEAD_FRAME_WIDTH = 13; // heads.png's native per-frame size (52x12 = 4 frames) - same sprite render/units.js draws above every unit on the board
+const HEAD_FRAME_HEIGHT = 12;
+const BODY_FRAME_SIZE = 24; // unit_sheet_${team}.png's native per-frame size - see render/units.js
+const COMMANDER_UNIT_INDEX = 9; // units.json's isCommander:true entry - the actual body frame every commander uses
+// Frame index == team index directly - heads.png's own frame order already
+// matches: 0 (blue) and 2 (green) are plain human faces, 1 (magenta/"red")
+// and 3 (navy/"black") are the grey helmed/skull-like ones. This is the
+// actual in-game head sprite (render/units.js's `head` overlay drawn above
+// every unit), not a decorative stand-in - see this file's git history for
+// the two earlier attempts (a 6-face bust strip, then a curated subset of
+// it) that used portraits.png instead and didn't match what's really on
+// the board.
+
 const FOOTER_BUTTON_RADIUS = 32;
 const FOOTER_RESERVED_HEIGHT = FOOTER_BUTTON_RADIUS * 2 + 40;
 const PANEL_TOP_MIN = 24 + TITLE_BAR_HEIGHT + 16; // just below the title bar
@@ -64,6 +76,27 @@ const PANEL_TOP_MIN = 24 + TITLE_BAR_HEIGHT + 16; // just below the title bar
 export class SkirmishSettingsScene extends Phaser.Scene {
   constructor() {
     super("SkirmishSettingsScene");
+  }
+
+  preload() {
+    // Same asset render/units.js loads for the on-board head overlay - see
+    // HEAD_FRAME_WIDTH/HEIGHT above for why team index doubles as frame
+    // index here.
+    this.load.spritesheet("heads", "/images/units/heads.png", {
+      frameWidth: HEAD_FRAME_WIDTH,
+      frameHeight: HEAD_FRAME_HEIGHT,
+    });
+    // Same per-team body sheets render/unitTexture.js's unit_sheet_${team}
+    // resolves to on the board - loaded for all 4 possible team slots here
+    // (PLAYER_COUNT_OPTIONS tops out at 4), not just however many the
+    // current game happens to use, since the Players stepper can raise
+    // that count after this preload already ran.
+    for (let team = 0; team < 4; team++) {
+      this.load.spritesheet(`unit_sheet_${team}`, `/images/units/unit_sheet_${team}.png`, {
+        frameWidth: BODY_FRAME_SIZE,
+        frameHeight: BODY_FRAME_SIZE,
+      });
+    }
   }
 
   init(data) {
@@ -217,10 +250,39 @@ export class SkirmishSettingsScene extends Phaser.Scene {
 
     for (let team = 0; team < playerCount; team++) {
       const y = startY + 24 + team * TEAM_ROW_HEIGHT;
-      const swatch = this.add
-        .rectangle(colX + SWATCH_SIZE / 2, y + SWATCH_SIZE / 2, SWATCH_SIZE, SWATCH_SIZE, TEAM_COLOR[team])
-        .setStrokeStyle(2, 0xffffff, 0.4);
-      this.teamRowObjects.push(swatch);
+      const iconCx = colX + SWATCH_SIZE / 2;
+      const iconCy = y + SWATCH_SIZE / 2;
+      const iconRadius = SWATCH_SIZE / 2;
+
+      // Same circular-button styling as everywhere else (addCircleButton's
+      // own navy fill + silver ring), so this reads as one more button in
+      // the set rather than a differently-styled swatch.
+      const circleBg = this.add.graphics();
+      circleBg.fillStyle(CIRCLE_BG, 1);
+      circleBg.fillCircle(iconCx, iconCy, iconRadius);
+      circleBg.lineStyle(2, CIRCLE_BORDER, 1);
+      circleBg.strokeCircle(iconCx, iconCy, iconRadius);
+      this.teamRowObjects.push(circleBg);
+
+      // Body + head composited the SAME way render/units.js draws a
+      // commander on the actual board (down to reusing its exact
+      // fractional offsets, just scaled from a 24px tile to this icon's
+      // own size) - not a separate illustration, the real in-game model.
+      // Sized to slightly less than the full circle (0.85x) so the
+      // character reads clearly inside the ring instead of touching its
+      // edge.
+      const bodySize = SWATCH_SIZE * 0.85;
+      const bodyTopLeftX = iconCx - bodySize / 2;
+      const bodyTopLeftY = iconCy - bodySize / 2;
+
+      const body = this.add.sprite(iconCx, iconCy, `unit_sheet_${team}`, COMMANDER_UNIT_INDEX);
+      body.setDisplaySize(bodySize, bodySize);
+      this.teamRowObjects.push(body);
+
+      const head = this.add.image(bodyTopLeftX + (bodySize * 7) / 24, bodyTopLeftY, "heads", team);
+      head.setOrigin(0, 0);
+      head.setDisplaySize((bodySize * 13) / 24, (bodySize * 12) / 24);
+      this.teamRowObjects.push(head);
 
       const typeStepper = addCircleStepper(this, typeStepperX, y + SWATCH_SIZE / 2, {
         text: PLAYER_TYPE_OPTIONS[this.playerTypeIndices[team]].label,
