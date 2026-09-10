@@ -2,7 +2,7 @@ import { PLAYER_TYPE } from "@ae/shared/src/turn.js";
 import { chooseRobotStep } from "@ae/shared/src/robot.js";
 import { createBoard } from "@ae/shared/src/movement.js";
 import { runGameAction, ACTION_PARAM_KEYS } from "./runGameAction.js";
-import { refreshUnits, animateUnitMove } from "../render/units.js";
+import { refreshUnits, animateUnitMove, animateResurrection } from "../render/units.js";
 import { refreshStatsPanel } from "../ui/statsPanel.js";
 import { refreshTombs, refreshTileTexture } from "../render/tiles.js";
 import { animateHpChanges } from "../render/hpChange.js";
@@ -112,6 +112,14 @@ const ANIMATORS = {
     await runGameAction(scene, "repair", params.unitId, params.x, params.y);
     refreshTileTexture(scene, params.x, params.y);
     showMessage(scene, "Repaired");
+  },
+
+  async summon(scene, params) {
+    await runGameAction(scene, "summon", params.summonerId, params.x, params.y);
+    refreshUnits(scene);
+    const summoned = scene.game_.getUnitAt(params.x, params.y);
+    if (summoned) await animateResurrection(scene, summoned.id);
+    showMessage(scene, "Resurrected");
   },
 };
 

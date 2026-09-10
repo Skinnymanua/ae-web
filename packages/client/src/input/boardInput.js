@@ -1,4 +1,4 @@
-import { animateUnitMove, refreshUnits } from "../render/units.js";
+import { animateUnitMove, animateResurrection, refreshUnits } from "../render/units.js";
 import { animateHpChanges } from "../render/hpChange.js";
 import { animateAttackHit, playAttackHitSequence } from "../render/attackEffect.js";
 import { runGameAction } from "../net/runGameAction.js";
@@ -7,6 +7,7 @@ import { showBuyMenu } from "../ui/dialogs.js";
 import { updateInfoText } from "../ui/hud.js";
 import { updateStatsPanel, refreshStatsPanel } from "../ui/statsPanel.js";
 import { updateBottomBarTile } from "../ui/bottomBar.js";
+import { showMessage } from "../render/messageBanner.js";
 import { TILE_SIZE, BOARD_OFFSET_Y } from "../constants.js";
 import {
   clearHighlights,
@@ -416,6 +417,9 @@ async function handleSummonTargetClick(scene, x, y) {
     await runGameAction(scene, "summon", summoner.id, x, y);
     scene.animating = false;
     refreshUnits(scene);
+    const summoned = scene.game_.getUnitAt(x, y);
+    if (summoned) await animateResurrection(scene, summoned.id);
+    showMessage(scene, "Resurrected");
     updateInfoText(scene);
     finishUnitActionOrCharge(scene, summoner);
     return;

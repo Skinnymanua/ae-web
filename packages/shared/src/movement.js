@@ -13,7 +13,7 @@
  * type on the board).
  */
 
-import { ABILITY, TILE_TYPE } from "./combat.js";
+import { ABILITY, TILE_TYPE, STATUS, hasStatus } from "./combat.js";
 
 const DX = [1, -1, 0, 0];
 const DY = [0, 0, 1, -1];
@@ -203,8 +203,19 @@ export function createPositionsWithinRange(board, x, y, minRange, maxRange) {
   return positions;
 }
 
+/** Ported from Unit#getMinAttackRange/#getMaxAttackRange, which both return 0
+ * while the unit is BLINDED - not a separate "can't act" flag, the unit's
+ * own attack range genuinely collapses to nothing. Every attack-range-based
+ * lookup routes through this (canAttack, healing, support, summon - see
+ * game-state.js's getAttackablePositions, the single shared entry point all
+ * of those call), so a blinded unit correctly loses all of them at once,
+ * matching the original - not a special case bolted onto just the attack
+ * action bar button. */
 export function createAttackablePositions(board, unit, includeSelf = false) {
-  const positions = createPositionsWithinRange(board, unit.x, unit.y, unit.minAttackRange, unit.maxAttackRange);
+  const blinded = hasStatus(unit, STATUS.BLINDED);
+  const minRange = blinded ? 0 : unit.minAttackRange;
+  const maxRange = blinded ? 0 : unit.maxAttackRange;
+  const positions = createPositionsWithinRange(board, unit.x, unit.y, minRange, maxRange);
   if (includeSelf) positions.add(posKey(unit.x, unit.y));
   return positions;
 }

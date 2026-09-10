@@ -22,7 +22,7 @@
  */
 
 import { ABILITY, STATUS, hasStatus, isDebuffStatus, attachStatus, clearStatus, manhattanRange } from "./combat.js";
-import { getMaxHp, canRefresh, getRefresherHeal } from "./combat-resolution.js";
+import { getMaxHp, canRefresh, getRefresherHeal, clampHealChange } from "./combat-resolution.js";
 
 function hasAbility(unit, abilityId) {
   return unit.abilities?.some((a) => (typeof a === "object" ? a.id === abilityId : a === abilityId));
@@ -442,7 +442,8 @@ export function applyAuraEffects(game, rule, units, unit) {
       }
       if (canRefresh(game, unit, target)) {
         const heal = getRefresherHeal(rule, unit, target);
-        target.currentHp += heal;
+        const change = clampHealChange(target, heal);
+        target.currentHp += change;
         // Same {unitId, x, y, change} shape combat-resolution.js's
         // resolveAttack/resolveHeal and this file's own nextTurn use for
         // their own hpChanges - callers pass this straight to
@@ -452,7 +453,7 @@ export function applyAuraEffects(game, rule, units, unit) {
         // nothing ever told the client there was anything to animate -
         // the healed/damaged unit's HP bar would just jump on the next
         // full refresh, with no floating number or bar animation at all.
-        hpChanges.push({ unitId: target.id, x: target.x, y: target.y, change: heal });
+        hpChanges.push({ unitId: target.id, x: target.x, y: target.y, change });
         if (target.currentHp <= 0) {
           target.currentHp = 0;
           if (!destroyedUnitIds.includes(target.id)) destroyedUnitIds.push(target.id);

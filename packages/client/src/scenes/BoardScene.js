@@ -5,7 +5,7 @@ import unitsData from "@ae/shared/data/units.json";
 import tilesData from "@ae/shared/data/tiles.json";
 import { MAPS } from "../maps/index.js";
 import { PLAYER_TYPE_OPTIONS, ALLIANCE_OPTIONS } from "./skirmishSettings.js";
-import { TILE_SIZE, BOARD_OFFSET_Y, getVisibleViewportSize } from "../constants.js";
+import { TILE_SIZE, BOARD_OFFSET_Y, TEAM_COLOR, getVisibleViewportSize } from "../constants.js";
 import { BOTTOM_BAR_HEIGHT } from "../ui/bottomBar.js";
 import { deserializeGameState } from "../net/deserializeGameState.js";
 import { setupNetworkedGameSync } from "../net/runGameAction.js";
@@ -280,6 +280,14 @@ export class BoardScene extends Phaser.Scene {
     this.pathPreviewRects = [];
     this.unitSprites = {};
     this.headSprites = {};
+    // Also start empty here now, not just inside refreshUnits() - the old
+    // version reset ALL FOUR of these maps to {} on every single call
+    // (destroy-and-recreate-everything), so it never mattered that these
+    // two weren't initialized anywhere else. The new incremental version
+    // (see render/units.js) only resets what actually changed, so these
+    // need a real starting value before its first call.
+    this.hpDigitSprites = {};
+    this.statusIconSprites = {};
     this.actionBarContainer = null;
     this.elapsedMs = 0;
 
@@ -367,8 +375,35 @@ export class BoardScene extends Phaser.Scene {
         .setDepth(1001);
     }
 
+    // Per-team survivor/gold summary + turn count - this screen never had
+    // any of this before, just the title and Back button. Only teams that
+    // actually took part (PLAYER_TYPE.NONE slots are skipped, matching
+    // turn.js's own isTeamAlive convention for "not a real team") - a local
+    // skirmish only using 2 of its 4 available slots shouldn't show two
+    // empty "0 units" rows.
+    const statsY = height / 2 + 50;
+    this.add
+      .text(width / 2, statsY, `Turn ${this.game_.turn}`, { fontSize: "14px", color: "#cccccc" })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(1001);
+
+    const activeTeams = this.game_.players.filter((p) => p.type !== PLAYER_TYPE.NONE).map((p) => p.team);
+    activeTeams.forEach((team, i) => {
+      const unitCount = this.game_.units.filter((u) => u.team === team).length;
+      const gold = this.game_.players[team]?.gold ?? 0;
+      this.add
+        .text(width / 2, statsY + 22 + i * 20, `Team ${team}: ${unitCount} units, ${gold} gold`, {
+          fontSize: "14px",
+          color: `#${TEAM_COLOR[team].toString(16).padStart(6, "0")}`,
+        })
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(1001);
+    });
+
     const backButton = this.add
-      .text(width / 2, height / 2 + 60, "[ Back to Menu ]", { fontSize: "18px", color: "#44aaff" })
+      .text(width / 2, statsY + 40 + activeTeams.length * 20, "[ Back to Menu ]", { fontSize: "18px", color: "#44aaff" })
       .setOrigin(0.5)
       .setInteractive()
       .setScrollFactor(0)

@@ -418,10 +418,24 @@ export class GameState {
     const unit = this.getUnit(unitId);
     const tile = this.getTileAt(x, y);
     if (!canOccupy(this, unit, tile)) return false;
+    const previousTeam = tile.team; // whoever held it before this capture, if anyone - checked below, not the conqueror
     const newIndex = resolveCapture(tile, unit.team);
     if (newIndex === null) return false;
     this.tileIndices[x][y] = newIndex;
     this._syncTileRefs();
+    // Missing before: attack()/heal() both check the losing team's destroy
+    // condition after anything that could eliminate them (see
+    // combat-resolution.js's applyAttack/applyHeal), but capturing a
+    // castle - the OTHER way a team gets eliminated (turn.js's
+    // isTeamDestroyed, gated on castleClear) - never did. A team that lost
+    // its last unit earlier (already checked then, but still owned a
+    // castle at the time, so castleCheck was still false) would sit
+    // destroyed-in-fact but never actually marked as such once that last
+    // castle fell too, since nothing asked again - the game would just
+    // never end.
+    if (previousTeam >= 0 && previousTeam !== unit.team) {
+      checkTeamDestroy(this, this.units, this._mapInfo(), previousTeam);
+    }
     return true;
   }
 

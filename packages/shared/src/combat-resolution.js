@@ -223,14 +223,32 @@ export function getRefresherHeal(rule, refresher, target) {
   return hasAbility(target, ABILITY.UNDEAD) ? -heal : heal;
 }
 
+/** Ported from UnitToolkit#validateHpChange: caps a heal so currentHp never
+ * exceeds the target's real max. The original calls this at BOTH the
+ * ordinary heal (OperationExecutor#onHeal) and REFRESH_AURA
+ * (OperationExecutor#onStandby) sites - this port's own resolveHeal/
+ * applyAuraEffects previously didn't (see the git history on the comment
+ * this replaced, which incorrectly called the lack of a clamp
+ * deliberate), which let a full-HP ally get healed past their actual max
+ * with nothing to stop it - most visible on a unit whose base maxHp is a
+ * round number like 100, where the overheal reads as "the bonus applies
+ * ABOVE 100hp" rather than what's actually happening (nothing capping it
+ * there at all). Only clamps the ceiling - a negative change (heal-as-
+ * damage against an UNDEAD target) passes through unchanged, matching the
+ * original (validateHpChange only clamps the > maxHp case). */
+export function clampHealChange(target, change) {
+  const maxHp = getMaxHp(target);
+  if (target.currentHp + change > maxHp) return maxHp - target.currentHp;
+  return change;
+}
+
 /**
  * Resolves a heal action: computes the heal (or heal-as-damage for an
- * UNDEAD target) via getHealerHeal, applies it, and grants experience -
- * ATTACK_EXPERIENCE normally, or KILL_EXPERIENCE if the heal-as-damage
- * finishes off an UNDEAD target. Ported from OperationExecutor#onHeal.
+ * UNDEAD target) via getHealerHeal, applies it (capped to the target's max
+ * HP - see clampHealChange above), and grants experience - ATTACK_EXPERIENCE
+ * normally, or KILL_EXPERIENCE if the heal-as-damage finishes off an UNDEAD
+ * target. Ported from OperationExecutor#onHeal.
  *
- * A living target's new HP is deliberately NOT clamped to their max (see
- * getHealerHeal's docstring) - only the death case clamps, to exactly 0.
  * Does NOT remove a destroyed target from the board - caller does that
  * using destroyedUnitIds, same convention as resolveAttack.
  */
@@ -251,8 +269,9 @@ export function resolveHeal(game, rule, healer, target) {
     gainExperience(healer, rule.killExperience, rule.maxLevel);
     events.push({ type: "GAIN_EXPERIENCE", unitId: healer.id, amount: rule.killExperience });
   } else {
-    target.currentHp += heal;
-    events.push({ type: "HEAL", healerId: healer.id, targetId: target.id, change: heal });
+    const change = clampHealChange(target, heal);
+    target.currentHp += change;
+    events.push({ type: "HEAL", healerId: healer.id, targetId: target.id, change });
     gainExperience(healer, rule.attackExperience, rule.maxLevel);
     events.push({ type: "GAIN_EXPERIENCE", unitId: healer.id, amount: rule.attackExperience });
   }
@@ -405,9 +424,16 @@ export function resolveAttack(game, rule, attacker, defender) {
 /**
  * Shared death handling for anything that can destroy units (attack,
  * heal-as-damage-to-undead below): bumps a dead commander's repurchase
- * price, or leaves a tomb for anyone else who wasn't already UNDEAD. Ported
- * from GameCore#destroyUnit's commander-price/tomb branches. Mutates `game`
- * only - does not remove anyone from `units` (caller does that).
+ * price, leaves a tomb for anyone else who wasn't already UNDEAD, and
+ * frees up the population slot the unit was occupying. Ported from
+ * GameCore#destroyUnit's commander-price/tomb branches - the population
+ * decrement is NOT from the original (it never tracked population this
+ * way to begin with), added because this port's own buyUnitAt/summon
+ * increment it on creation but nothing decremented it back on death,
+ * leaving the "3/15" counter permanently wrong (only ever climbing, right
+ * up to a real cap that no longer reflected how many units actually
+ * remained) for the rest of the match. Mutates `game` only - does not
+ * remove anyone from `units` (caller does that).
  */
 function handleUnitDeaths(game, units, destroyedUnitIds) {
   for (const deadId of destroyedUnitIds) {
@@ -418,6 +444,11 @@ function handleUnitDeaths(game, units, destroyedUnitIds) {
       game.commanderDeaths[deadUnit.team] = (game.commanderDeaths[deadUnit.team] ?? 0) + 1;
     } else if (!hasAbility(deadUnit, ABILITY.UNDEAD)) {
       addTomb(game, deadUnit.x, deadUnit.y);
+    }
+    const player = game.players.find((p) => p.team === deadUnit.team);
+    const unitDef = game.unitDefs.find((d) => d.index === deadUnit.unitIndex);
+    if (player && unitDef) {
+      player.population = Math.max(0, player.population - unitDef.occupancy);
     }
   }
 }

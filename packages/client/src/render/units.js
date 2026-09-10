@@ -20,53 +20,151 @@ const STATUS_ICON_SIZE = TILE_SIZE / 3;
 const SCHAR_WIDTH = (TILE_SIZE * 6) / 24;
 const SCHAR_HEIGHT = (TILE_SIZE * 7) / 24;
 
-/** Destroys and redraws every unit sprite (+ head overlay + HP number + status
- * badge) from current game_ state. */
+/**
+ * Syncs unit sprites (+ head overlay + HP number + status badge) to current
+ * game_ state - called from 23 different places across the client (every
+ * move, attack, heal, occupy, repair, standby, buy, summon, support, end
+ * turn, and every robot action), so what this function actually costs
+ * matters a lot, especially on mobile.
+ *
+ * Body and head sprites are now updated IN PLACE (position + tint on an
+ * existing Phaser sprite) rather than destroyed and recreated every call -
+ * this used to tear down and rebuild every unit sprite on the WHOLE board
+ * on every single action, even ones that only touched one unit, which is
+ * real, avoidable GC/allocation pressure that mobile CPUs feel far more
+ * than desktop does. A unit's texture (body frame, head frame) is fixed
+ * for its whole lifetime once created - unitIndex/team/head never change
+ * on an existing unit - so there's nothing to update there after creation,
+ * only position (moves) and tint (standby toggling).
+ *
+ * HP-digit and status-icon sprites stay destroy-and-recreate, but now only
+ * for the ONE unit being processed, not the whole board - correctness here
+ * is genuinely simpler that way (digit COUNT changes as HP changes between
+ * 1 and 2+ digits, status icons appear/disappear entirely), and these only
+ * exist at all for damaged/status-afflicted units, not every unit on the
+ * board, so the per-call cost was never the dominant one the way the
+ * unconditional body+head sprites were.
+ */
+/** New sprite fading/scaling in from nothing - the summon action's own
+ * effect (no equivalent existed before; every other action already had one:
+ * attack's spark sequence, heal's floating numbers, occupy/repair's tile
+ * swap + banner). Targets whatever's already in scene.unitSprites for
+ * unitId - call this AFTER refreshUnits() has created that sprite, not
+ * before. Purely cosmetic pacing, same as every other animate* helper in
+ * this file - resolves once the tween finishes. */
+export function animateResurrection(scene, unitId) {
+  const sprite = scene.unitSprites[unitId];
+  const head = scene.headSprites[unitId];
+  const targets = head ? [sprite, head] : [sprite];
+  if (!sprite) return Promise.resolve();
+
+  targets.forEach((t) => {
+    t.setAlpha(0);
+    t.setScale(t.scaleX * 0.3, t.scaleY * 0.3);
+  });
+
+  return new Promise((resolve) => {
+    scene.tweens.add({
+      targets,
+      alpha: 1,
+      scaleX: (target) => target.scaleX / 0.3,
+      scaleY: (target) => target.scaleY / 0.3,
+      duration: 400,
+      ease: "Back.Out",
+      onComplete: resolve,
+    });
+  });
+}
+
 export function refreshUnits(scene) {
-  for (const sprite of Object.values(scene.unitSprites)) sprite.destroy();
-  for (const sprite of Object.values(scene.headSprites)) sprite.destroy();
-  for (const digits of Object.values(scene.hpDigitSprites ?? {})) {
-    for (const d of digits) d.destroy();
+  const seenIds = new Set(scene.game_.units.map((u) => u.id));
+
+  // Sweep sprites for units that no longer exist (died, etc.) - anything
+  // left behind here would otherwise just sit at its last position forever.
+  // unit.id is always a string (game-state.js's generateUnitId: "unit-N"),
+  // matching Object.entries' own string keys directly - no numeric
+  // conversion needed.
+  for (const [id, sprite] of Object.entries(scene.unitSprites)) {
+    if (!seenIds.has(id)) {
+      sprite.destroy();
+      delete scene.unitSprites[id];
+    }
   }
-  for (const sprite of Object.values(scene.statusIconSprites ?? {})) sprite.destroy();
-  scene.unitSprites = {};
-  scene.headSprites = {};
-  scene.hpDigitSprites = {};
-  scene.statusIconSprites = {};
+  for (const [id, sprite] of Object.entries(scene.headSprites)) {
+    if (!seenIds.has(id)) {
+      sprite.destroy();
+      delete scene.headSprites[id];
+    }
+  }
+  // Same sweep for HP-digit/status sprites - these are rebuilt per-unit
+  // inside the loop below for units that still exist, but a unit that just
+  // died needs its old ones cleaned up here too, or they'd sit at its last
+  // position forever the same way an unswept body/head sprite would.
+  for (const [id, digits] of Object.entries(scene.hpDigitSprites)) {
+    if (!seenIds.has(id)) {
+      for (const d of digits) d.destroy();
+      delete scene.hpDigitSprites[id];
+    }
+  }
+  for (const [id, sprite] of Object.entries(scene.statusIconSprites)) {
+    if (!seenIds.has(id)) {
+      sprite.destroy();
+      delete scene.statusIconSprites[id];
+    }
+  }
 
   for (const unit of scene.game_.units) {
     const topLeftX = unit.x * TILE_SIZE;
     const topLeftY = unit.y * TILE_SIZE + BOARD_OFFSET_Y;
+    const tint = unit.standby ? 0x888888 : 0xffffff;
 
-    const { key: spriteKey, frame: spriteFrame } = getUnitSpriteKey(unit.unitIndex, unit.team);
-    const sprite = scene.add.sprite(topLeftX + TILE_SIZE / 2, topLeftY + TILE_SIZE / 2, spriteKey, spriteFrame);
-    sprite.setDisplaySize(TILE_SIZE, TILE_SIZE);
-    sprite.setTint(unit.standby ? 0x888888 : 0xffffff);
-    sprite.setData("unitIndex", unit.unitIndex);
-    sprite.setData("standby", unit.standby);
-    sprite.setDepth(DEPTH.UNITS);
-    // Not interactive: unit sprites sit on top of their tile, and the tile's
-    // own pointerdown (drawTileGrid) handles selection/movement. Keeping units
-    // non-interactive avoids blocking that click — see boardInput.js for how
-    // the stats panel gets updated on selection instead of hover.
-    scene.unitSprites[unit.id] = sprite;
+    let sprite = scene.unitSprites[unit.id];
+    if (sprite) {
+      sprite.setPosition(topLeftX + TILE_SIZE / 2, topLeftY + TILE_SIZE / 2);
+      sprite.setTint(tint);
+      sprite.setData("standby", unit.standby);
+    } else {
+      const { key: spriteKey, frame: spriteFrame } = getUnitSpriteKey(unit.unitIndex, unit.team);
+      sprite = scene.add.sprite(topLeftX + TILE_SIZE / 2, topLeftY + TILE_SIZE / 2, spriteKey, spriteFrame);
+      sprite.setDisplaySize(TILE_SIZE, TILE_SIZE);
+      sprite.setTint(tint);
+      sprite.setData("unitIndex", unit.unitIndex);
+      sprite.setData("standby", unit.standby);
+      sprite.setDepth(DEPTH.UNITS);
+      // Not interactive: unit sprites sit on top of their tile, and the tile's
+      // own pointerdown (drawTileGrid) handles selection/movement. Keeping units
+      // non-interactive avoids blocking that click — see boardInput.js for how
+      // the stats panel gets updated on selection instead of hover.
+      scene.unitSprites[unit.id] = sprite;
+    }
 
     if (unit.isCommander) {
       // Original draws heads in libGDX's Y-up coordinate space; Phaser/canvas is Y-down,
       // so the original's "+ ts/2" offset becomes "no offset" here (top half of the tile,
       // over the shoulders, not the bottom half).
-      const head = scene.add.image(topLeftX + (TILE_SIZE * 7) / 24, topLeftY, "heads", unit.head ?? 0);
-      head.setOrigin(0, 0);
-      head.setDisplaySize((TILE_SIZE * 13) / 24, (TILE_SIZE * 12) / 24);
-      head.setTint(unit.standby ? 0x888888 : 0xffffff);
-      head.setDepth(DEPTH.UNITS);
-      scene.headSprites[unit.id] = head;
+      const headX = topLeftX + (TILE_SIZE * 7) / 24;
+      let head = scene.headSprites[unit.id];
+      if (head) {
+        head.setPosition(headX, topLeftY);
+        head.setTint(tint);
+      } else {
+        head = scene.add.image(headX, topLeftY, "heads", unit.head ?? 0);
+        head.setOrigin(0, 0);
+        head.setDisplaySize((TILE_SIZE * 13) / 24, (TILE_SIZE * 12) / 24);
+        head.setTint(tint);
+        head.setDepth(DEPTH.UNITS);
+        scene.headSprites[unit.id] = head;
+      }
     }
+
+    // HP digits and the status badge stay destroy-and-recreate, but scoped
+    // to just this unit now (see this function's own docstring for why).
+    for (const d of scene.hpDigitSprites[unit.id] ?? []) d.destroy();
+    scene.hpDigitSprites[unit.id] = [];
 
     // Ported from CanvasRenderer#drawUnitWithInformation: only shown while damaged,
     // digits drawn bottom-left of the tile via FontRenderer#drawSNumber.
     const maxHp = getMaxHp(unit);
-    scene.hpDigitSprites[unit.id] = [];
     if (unit.currentHp !== maxHp) {
       const digits = String(unit.currentHp).split("").map(Number);
       const digitY = topLeftY + TILE_SIZE - SCHAR_HEIGHT;
@@ -78,6 +176,9 @@ export function refreshUnits(scene) {
         scene.hpDigitSprites[unit.id].push(digitSprite);
       });
     }
+
+    scene.statusIconSprites[unit.id]?.destroy();
+    delete scene.statusIconSprites[unit.id];
 
     // Ported from android/assets/images/status.png via
     // CanvasRenderer#drawUnitWithInformation - the original draws this at
