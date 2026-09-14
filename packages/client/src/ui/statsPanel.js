@@ -28,17 +28,18 @@ import {
 } from "@ae/shared/src/combat-resolution.js";
 
 const BAR_HEIGHT = BOARD_OFFSET_Y;
-const ROW_HEIGHT = 34;
-const PORTRAIT_SIZE = 90;
-// Scaled up roughly 1.4x across the board (badge/icon/pill/font all
-// together) - see constants.js's BOARD_OFFSET_Y for the matching bump to
-// BAR_HEIGHT itself, which this whole panel's height derives from.
-const BADGE_RADIUS = 15;
-const ICON_SIZE = 24;
-const PILL_WIDTH = 150;
-const PILL_HEIGHT = 30;
-const STAT_FONT_SIZE = "20px";
-const PILL_TEXT_PADDING = 0;
+const ROW_HEIGHT = 31;
+const PORTRAIT_SIZE = 83;
+// Rescaled to 1.3x the original values (was ~1.4x - see git history for
+// that pass and why it's recomputed from the ORIGINAL numbers each time,
+// not by further scaling whatever the last pass already produced, since
+// that would compound rounding error across repeated rescales).
+const BADGE_RADIUS = 14;
+const ICON_SIZE = 22;
+const PILL_WIDTH = 96;
+const PILL_HEIGHT = 28;
+const STAT_FONT_SIZE = "16px";
+const PILL_TEXT_PADDING = 10;
 
 const CELL_BG = 0x232838;
 const PILL_BG = 0x3a4258;
@@ -107,7 +108,7 @@ export function createStatsPanel(scene) {
   container.add(g);
 
   const centerX = barWidth / 2;
-  const cellPad = 6;
+  const cellPad = 5;
 
   // One continuous background spanning the whole bar, not three separate
   // boxes with visible gaps between them - the portrait still gets its own
@@ -121,8 +122,8 @@ export function createStatsPanel(scene) {
   g.lineStyle(2, 0xffffff, 0.6);
   g.strokeRoundedRect(centerX - PORTRAIT_SIZE / 2, cellPad, PORTRAIT_SIZE, BAR_HEIGHT - cellPad * 2, 8);
 
-  const leftX = 14;
-  const rightX = barWidth - 14;
+  const leftX = 13;
+  const rightX = barWidth - 13;
   let rowY = 8;
 
   // Clamped down from PILL_WIDTH when there isn't enough room between the

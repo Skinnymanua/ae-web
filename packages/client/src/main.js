@@ -15,7 +15,14 @@ import { MENU_WIDTH, MENU_HEIGHT, getMenuSize } from "./constants.js";
 // resizes the canvas dynamically to fit whichever map gets chosen (see its
 // own create()), so this is only ever the STARTING size, not a permanent one.
 new Phaser.Game({
-  type: Phaser.AUTO,
+  // Forced, not Phaser.AUTO - AUTO falls back to Canvas2D if WebGL init
+  // looks unavailable/unreliable, which some mobile browsers/webviews
+  // trigger even when WebGL actually works fine. Canvas2D is noticeably
+  // slower for a sprite-heavy scene like this one, so it's worth forcing
+  // WebGL and letting it fail loudly (blank canvas, console error) on the
+  // rare real WebGL-less device rather than silently degrading everyone
+  // else's performance to accommodate that case.
+  type: Phaser.WEBGL,
   parent: "game",
   backgroundColor: "#222222",
   // Sets NEAREST texture filtering + rounds every sprite's render position
@@ -27,6 +34,19 @@ new Phaser.Game({
   // general wants this regardless; this project just didn't hit the
   // symptom until a continuously-moving sprite existed to expose it.
   pixelArt: true,
+  // Explicit, not left to WebGL defaults - iOS Safari/WebKit's GPU tier
+  // selection for a canvas context is more conservative than Android
+  // Chrome's by default, and antialiasing costs real fill-rate for zero
+  // benefit on pixel art (pixelArt: true above already disables texture
+  // smoothing, but doesn't touch the context's own antialias flag,
+  // which is a separate WebGL setting). Neither of these fixes the
+  // deeper iOS-specific gap (see main.js's own note further down on
+  // texture-atlas consolidation), but they're free and safe to set either
+  // way.
+  render: {
+    antialias: false,
+    powerPreference: "high-performance",
+  },
   // ENVELOP (not FIT): FIT only scales to the LIMITING dimension, so a
   // board/menu with a wider-than-viewport aspect ratio ends up spanning
   // full width with empty bars above/below rather than filling the screen -
