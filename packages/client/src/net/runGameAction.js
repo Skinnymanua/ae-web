@@ -47,7 +47,24 @@ function argsToParams(actionType, args) {
 
 export function runGameAction(scene, actionType, ...args) {
   if (!scene.net_) {
-    const result = scene.game_[actionType](...args);
+    // Local mode's own version of the networked branch's rejection guard
+    // below: a GameState method throwing here (e.g. a click handler letting
+    // an invalid target through to something like heal(), which re-checks
+    // canHeal itself and throws if that fails) would otherwise leave
+    // scene.animating stuck true forever with nothing to ever reset it -
+    // every caller already sets scene.animating = true BEFORE this call and
+    // relies on its own success path to clear it, so an exception here skips
+    // that entirely. onTileClick's `if (scene.animating) return;` guard then
+    // permanently blocks all further board interaction, exactly like the
+    // networked rejection case below - same fix, same reasoning, just for
+    // the synchronous-throw case instead of a promise rejection.
+    let result;
+    try {
+      result = scene.game_[actionType](...args);
+    } catch (err) {
+      scene.animating = false;
+      throw err;
+    }
     // Checked here, centrally, same reasoning as the networked branch below
     // (see setupNetworkedGameSync's own comment on scene.onGameOver) - every
     // mutating action funnels through this one function, so this is the

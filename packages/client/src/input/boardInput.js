@@ -303,12 +303,28 @@ async function confirmPendingDestroyTile(scene, attacker, x, y) {
 /** Same two-click preview/confirm shape as attack above, for Heal. A click on
  * the healer's own tile works the same way as any other valid target -
  * self-heal is just canHeal(healer, healer) being true (see
- * GameState#getHealablePositions). */
+ * GameState#getHealablePositions).
+ *
+ * Checks membership in getHealablePositions BEFORE calling canHeal, not just
+ * canHeal alone - unlike canAttack (which bakes its own isWithinRange check
+ * in), canHeal deliberately has NO range check of its own (matches the
+ * original GameCore#canHeal - see combat-resolution.js's docstring on it),
+ * on the assumption that every caller only ever offers it pre-filtered,
+ * in-range candidates the way getHealablePositions already computes them.
+ * Calling canHeal directly on whatever unit happens to be under the click
+ * skipped that pre-filter entirely, letting any ally anywhere on the board
+ * be selected as a heal target - which then made resolveHeal's own
+ * canHeal-recheck throw (it also requires canHeal), an exception that
+ * propagated out of confirmPendingHeal's `await runGameAction(...)` with
+ * scene.animating already set true and nothing to ever reset it - see
+ * runGameAction's own doc comment on why that reset doesn't reach the local
+ * (non-networked) branch. That's what actually froze the board. */
 function handleHealTargetClick(scene, x, y) {
   const healer = scene._pendingHealer;
   const target = scene.game_.getUnitAt(x, y);
+  const inRange = scene.game_.getHealablePositions(healer.id).has(`${x},${y}`);
 
-  if (target && scene.game_.canHeal(healer.id, target.id)) {
+  if (target && inRange && scene.game_.canHeal(healer.id, target.id)) {
     if (scene.pendingHealTarget === target.id) {
       confirmPendingHeal(scene, healer, target);
       return;
