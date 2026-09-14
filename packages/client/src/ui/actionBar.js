@@ -105,6 +105,21 @@ export async function finishUnitAction(scene, unit) {
  * Otherwise this is just finishUnitAction.
  */
 export function finishUnitActionOrCharge(scene, unit) {
+  // Sync board visuals for the action that JUST resolved before deciding
+  // whether this unit gets a bonus CHARGER move - ported behavior (see the
+  // docstring above) applies attack/heal damage to the model and plays its
+  // animation as its own operation, entirely independent of the later
+  // canMoveAgain check, so the defender's HP digit, status icons, any tomb
+  // left behind, and the stats panel should never wait on a follow-up move
+  // that might not happen for several more seconds. The floating damage
+  // number (playAttackHitSequence) already played before this was called -
+  // this is the persistent state (units.js's HP-digit sprites etc.) that
+  // previously only got redrawn once finishUnitAction ran, i.e. only after
+  // the charger's bonus move finished.
+  refreshUnits(scene);
+  refreshTombs(scene);
+  updateInfoText(scene);
+  refreshStatsPanel(scene);
   // Same re-fetch-by-id reasoning as finishUnitAction above - canMoveAgain
   // below reads currentHp/currentMovementPoint/abilities directly off
   // `unit`, so a stale networked-mode reference could give a wrong answer
