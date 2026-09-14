@@ -223,31 +223,39 @@ export function getRefresherHeal(rule, refresher, target) {
   return hasAbility(target, ABILITY.UNDEAD) ? -heal : heal;
 }
 
-/** Ported from UnitToolkit#validateHpChange: caps a heal so currentHp never
- * exceeds the target's real max. The original calls this at BOTH the
- * ordinary heal (OperationExecutor#onHeal) and REFRESH_AURA
- * (OperationExecutor#onStandby) sites - this port's own resolveHeal/
- * applyAuraEffects previously didn't (see the git history on the comment
- * this replaced, which incorrectly called the lack of a clamp
- * deliberate), which let a full-HP ally get healed past their actual max
- * with nothing to stop it - most visible on a unit whose base maxHp is a
- * round number like 100, where the overheal reads as "the bonus applies
- * ABOVE 100hp" rather than what's actually happening (nothing capping it
- * there at all). Only clamps the ceiling - a negative change (heal-as-
- * damage against an UNDEAD target) passes through unchanged, matching the
- * original (validateHpChange only clamps the > maxHp case). */
+/** Ported from UnitToolkit#validateHpChange: clamps a change to keep
+ * currentHp within [0, maxHp]. The original calls this at the REFRESH_AURA
+ * site (OperationExecutor#onStandby - see turn.js's applyAuraEffects, the
+ * only remaining caller) AND at the ordinary heal site's LETHAL branch
+ * (heal-as-damage finishing off an UNDEAD target - see resolveHeal below).
+ * It is NOT called for an ordinary heal's normal (non-lethal) branch -
+ * OperationExecutor#onHeal submits that heal's RAW value with no clamp at
+ * all there, deliberately letting a HEALER's heal push a target above its
+ * own max HP; the overflow is trimmed later, at that target's own next
+ * standby (see GameState#standby's overflow-clamp). An earlier version of
+ * resolveHeal called this on BOTH branches, on the theory that the
+ * original always clamps heals - it doesn't, only REFRESH_AURA and the
+ * lethal branch do. Clamping the normal branch's ceiling was a port
+ * deviation, and it had a second, worse effect: healing a target already
+ * at exactly max HP forced change to 0, and a change:0 HEAL event is
+ * exactly what used to leave hpChange.js's animateHpChanges permanently
+ * stuck (see its own fix for the actual crash; this fix removes the
+ * specific trigger for it). */
 export function clampHealChange(target, change) {
   const maxHp = getMaxHp(target);
   if (target.currentHp + change > maxHp) return maxHp - target.currentHp;
+  if (target.currentHp + change < 0) return -target.currentHp;
   return change;
 }
 
 /**
  * Resolves a heal action: computes the heal (or heal-as-damage for an
- * UNDEAD target) via getHealerHeal, applies it (capped to the target's max
- * HP - see clampHealChange above), and grants experience - ATTACK_EXPERIENCE
- * normally, or KILL_EXPERIENCE if the heal-as-damage finishes off an UNDEAD
- * target. Ported from OperationExecutor#onHeal.
+ * UNDEAD target) via getHealerHeal, applies it - clamped only on the
+ * lethal (heal-as-damage) branch so it doesn't go below 0, uncapped on the
+ * ceiling for an ordinary heal (see clampHealChange's own docstring for
+ * why) - and grants experience - ATTACK_EXPERIENCE normally, or
+ * KILL_EXPERIENCE if the heal-as-damage finishes off an UNDEAD target.
+ * Ported from OperationExecutor#onHeal.
  *
  * Does NOT remove a destroyed target from the board - caller does that
  * using destroyedUnitIds, same convention as resolveAttack.
@@ -261,17 +269,18 @@ export function resolveHeal(game, rule, healer, target) {
   const events = [];
 
   if (target.currentHp + heal <= 0) {
-    const change = -target.currentHp; // actual delta applied: down to exactly 0
-    target.currentHp = 0;
+    const change = clampHealChange(target, heal); // actual delta applied: down to exactly 0
+    target.currentHp += change;
     events.push({ type: "HEAL", healerId: healer.id, targetId: target.id, change });
     destroyedUnitIds.push(target.id);
     events.push({ type: "UNIT_DESTROY", unitId: target.id, killedBy: healer.id });
     gainExperience(healer, rule.killExperience, rule.maxLevel);
     events.push({ type: "GAIN_EXPERIENCE", unitId: healer.id, amount: rule.killExperience });
   } else {
-    const change = clampHealChange(target, heal);
-    target.currentHp += change;
-    events.push({ type: "HEAL", healerId: healer.id, targetId: target.id, change });
+    // No ceiling clamp here - matches OperationExecutor#onHeal's own
+    // non-lethal branch exactly (see clampHealChange's docstring above).
+    target.currentHp += heal;
+    events.push({ type: "HEAL", healerId: healer.id, targetId: target.id, change: heal });
     gainExperience(healer, rule.attackExperience, rule.maxLevel);
     events.push({ type: "GAIN_EXPERIENCE", unitId: healer.id, amount: rule.attackExperience });
   }

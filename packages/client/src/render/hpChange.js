@@ -42,6 +42,16 @@ const LCHAR_MINUS = 11;
 export function animateHpChanges(scene, changes, onComplete) {
   const active = (changes ?? []).filter((c) => c.change !== 0);
   if (active.length === 0) {
+    // Every caller (confirmPendingHeal, finishUnitAction, etc.) sets
+    // scene.animating = true BEFORE calling this, expecting the eventual
+    // timer completion below to clear it - this early-return path skipped
+    // that entirely, leaving scene.animating stuck true forever whenever
+    // every change in the batch happened to be 0 (e.g. healing a target
+    // already at max HP - see combat-resolution.js's clampHealChange for
+    // the other half of that specific fix). onTileClick's own `if
+    // (scene.animating) return;` guard then permanently blocked all
+    // further board interaction with nothing to ever undo it.
+    scene.animating = false;
     onComplete?.();
     return;
   }
