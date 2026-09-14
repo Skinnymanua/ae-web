@@ -45,7 +45,6 @@ const SCHAR_HEIGHT = (TILE_SIZE * 7) / 24;
  * board, so the per-call cost was never the dominant one the way the
  * unconditional body+head sprites were.
  */
-<<<<<<< Updated upstream
 /** New sprite fading/scaling in from nothing - the summon action's own
  * effect (no equivalent existed before; every other action already had one:
  * attack's spark sequence, heal's floating numbers, occupy/repair's tile
@@ -77,8 +76,6 @@ export function animateResurrection(scene, unitId) {
   });
 }
 
-=======
->>>>>>> Stashed changes
 export function refreshUnits(scene) {
   const seenIds = new Set(scene.game_.units.map((u) => u.id));
 
