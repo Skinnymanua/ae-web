@@ -170,7 +170,17 @@ export function refreshTombs(scene) {
       tomb.x * TILE_SIZE + TILE_SIZE - 2,
       tomb.y * TILE_SIZE + BOARD_OFFSET_Y + 2,
       String(tomb.remainingTurn + 1),
-      { fontSize: "11px", color: "#ffffff", fontStyle: "bold" }
+      {
+        fontSize: "11px",
+        color: "#ffffff",
+        fontStyle: "bold",
+        // Tombstone sprite is only 24x24 with a transparent corner where this
+        // label sits (see tombstone.png), so it renders straight over
+        // whatever terrain tile is underneath - plain white text disappears
+        // over light tiles (sand, snow, bright grass) without this.
+        stroke: "#000000",
+        strokeThickness: 3,
+      }
     );
     label.setOrigin(1, 0);
     label.setDepth(DEPTH.TOMBS + 1);
