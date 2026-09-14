@@ -142,17 +142,38 @@ export function clearSelectedTileHighlight(scene) {
  * Sits on DEPTH.TOMBS - below units, above tiles - matching
  * GameScreen#drawTombs being called right before drawUnits in the original.
  */
+/** Ported tombstone rendering (see turn.js's addTomb/updateTombs for the
+ * remainingTurn countdown itself), now with that countdown actually shown
+ * on screen - previously nothing on the tile hinted how much longer a tomb
+ * had before it disappeared, so a Necromancer's summon window would just
+ * close with no warning. Destroy-and-recreate each call, unlike units.js's
+ * refreshUnits: tombs are rare (usually a handful at most, never one per
+ * tile), so the incremental-update optimization that matters for a
+ * board-wide unit refresh isn't worth the extra complexity here. */
 export function refreshTombs(scene) {
   for (const sprite of scene.tombSprites ?? []) sprite.destroy();
   scene.tombSprites = [];
   for (const tomb of scene.game_.tombs) {
-    const sprite = scene.add.image(
-      tomb.x * TILE_SIZE + TILE_SIZE / 2,
-      tomb.y * TILE_SIZE + TILE_SIZE / 2 + BOARD_OFFSET_Y,
-      "tombstone"
-    );
+    const centerX = tomb.x * TILE_SIZE + TILE_SIZE / 2;
+    const centerY = tomb.y * TILE_SIZE + TILE_SIZE / 2 + BOARD_OFFSET_Y;
+
+    const sprite = scene.add.image(centerX, centerY, "tombstone");
     sprite.setDisplaySize(TILE_SIZE, TILE_SIZE);
     sprite.setDepth(DEPTH.TOMBS);
     scene.tombSprites.push(sprite);
+
+    // remainingTurn counts down to 0 (inclusive - see updateTombs' >= 0
+    // filter), so a tomb showing "1" here disappears at the NEXT
+    // endTurn's tomb-decay pass, not the one after - i.e. this number is
+    // "turns left including the current one", not one already spent.
+    const label = scene.add.text(
+      tomb.x * TILE_SIZE + TILE_SIZE - 2,
+      tomb.y * TILE_SIZE + BOARD_OFFSET_Y + 2,
+      String(tomb.remainingTurn + 1),
+      { fontSize: "11px", color: "#ffffff", fontStyle: "bold" }
+    );
+    label.setOrigin(1, 0);
+    label.setDepth(DEPTH.TOMBS + 1);
+    scene.tombSprites.push(label);
   }
 }
