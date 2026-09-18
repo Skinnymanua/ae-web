@@ -4,7 +4,7 @@ import unitDescriptions from "@ae/shared/data/unit-descriptions.json";
 import { createPurchaseStrip } from "./purchaseStrip.js";
 import { purchaseUnit } from "../input/boardInput.js";
 import { getUnitSpriteKey } from "../render/unitTexture.js";
-import { drawMenuPanel } from "./menuPanel.js";
+import { drawDialogBorder } from "./menuPanel.js";
 import { DEPTH, HUD_ICON, STAT_ICON, PHYSICAL_ATTACK_COLOR, MAGIC_ATTACK_COLOR } from "../constants.js";
 
 // Shared sizing for every icon+value pair in this panel. A single fixed icon
@@ -49,31 +49,6 @@ function addIconValueRight(scene, container, y, iconSheet, iconFrame, fontSize, 
     return icon.x - iconSize / 2; // this group's own left edge, for chaining another group further left
   }
   return { text, updateGroup };
-}
-
-/**
- * Draws the original's dialog-window frame - ported from BorderRenderer.
- * drawBorder(), which BasicDialog (UnitStoreDialog's base class) uses for
- * every dialog. Four fixed-size corner pieces (frames 0/2/5/7) plus four edge
- * pieces (1/3/4/6) stretched to fill the gap between them - see border.png's
- * load call in BoardScene.js for the frame layout. Assumes `container`
- * already has a filled background rectangle sized (width, height) at (0,0);
- * this only adds the frame on top of it.
- */
-export function drawDialogBorder(scene, container, width, height, borderSize = 16) {
-  const piece = (frameIndex, x, y, w, h) => {
-    const img = scene.add.image(x, y, "border", frameIndex).setOrigin(0, 0);
-    img.setDisplaySize(w, h);
-    container.add(img);
-  };
-  piece(0, 0, 0, borderSize, borderSize); // top-left corner
-  piece(1, borderSize, 0, width - borderSize * 2, borderSize); // top edge
-  piece(2, width - borderSize, 0, borderSize, borderSize); // top-right corner
-  piece(3, 0, borderSize, borderSize, height - borderSize * 2); // left edge
-  piece(4, width - borderSize, borderSize, borderSize, height - borderSize * 2); // right edge
-  piece(5, 0, height - borderSize, borderSize, borderSize); // bottom-left corner
-  piece(6, borderSize, height - borderSize, width - borderSize * 2, borderSize); // bottom edge
-  piece(7, width - borderSize, height - borderSize, borderSize, borderSize); // bottom-right corner
 }
 
 /**
@@ -163,13 +138,16 @@ function addIconButton(scene, container, x, y, radius, iconType) {
 /** Simple modal Yes/No confirm box. Sets scene.modalOpen while shown, blocking
  * board input.
  *
- * Framed with drawMenuPanel - the same navy beveled panel render/messageBanner.js
- * uses for its own notifications - instead of the old plain black rectangle +
- * white stroke, so a confirm prompt and a passive notification now read as the
- * same family of UI rather than two different dialog styles. Sizing follows
- * messageBanner.js's own playOnce exactly: measure the wrapped text first,
- * pad it out (PANEL_PADDING_X/Y), floor the width so a short message doesn't
- * draw a comically narrow box.
+ * Framed the same way showBuyMenu's own panel is - a flat navy fill
+ * (same 0x1a2038/0.96 as showBuyMenu's bg) plus drawDialogBorder's
+ * border.png corner/edge frame on top - rather than the old plain black
+ * rectangle + white stroke, so a confirm prompt and the purchase menu now
+ * read as the same family of dialog rather than two different styles.
+ * render/messageBanner.js's own notification panel uses this identical
+ * recipe too (see its own doc comment), so all three now match exactly.
+ * Sizing follows messageBanner.js's own playOnce: measure the wrapped text
+ * first, pad it out (PANEL_PADDING_X/Y), floor the width so a short message
+ * doesn't draw a comically narrow box.
  *
  * Confirm/cancel buttons are fixed at the screen's bottom corners
  * (container=null - see addIconButton's own docstring) rather than inside the
@@ -195,7 +173,14 @@ export function showConfirm(scene, message, onYes, onNo) {
   const panelHeight = text.height + PANEL_PADDING_Y * 2;
   const panelX = cam.width / 2 - panelWidth / 2;
   const panelY = cam.height / 2 - panelHeight / 2;
-  const panel = drawMenuPanel(scene, panelX, panelY, panelWidth, panelHeight).setScrollFactor(0).setDepth(DEPTH.DIALOG);
+
+  // Container-relative, same convention as showBuyMenu's own panel: a plain
+  // filled background at (0,0) sized (panelWidth, panelHeight), then
+  // drawDialogBorder overlays the frame on top of it.
+  const panel = scene.add.container(panelX, panelY).setScrollFactor(0).setDepth(DEPTH.DIALOG);
+  const panelBg = scene.add.rectangle(0, 0, panelWidth, panelHeight, 0x1a2038, 0.96).setOrigin(0, 0);
+  panel.add(panelBg);
+  drawDialogBorder(scene, panel, panelWidth, panelHeight);
   text.setPosition(cam.width / 2, cam.height / 2);
 
   // Same fixed bottom-corner spot as showBuyMenu's own buyButton/cancelButton

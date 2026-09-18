@@ -119,7 +119,6 @@ const ANIMATORS = {
     refreshUnits(scene);
     const summoned = scene.game_.getUnitAt(params.x, params.y);
     if (summoned) await animateResurrection(scene, summoned.id);
-    showMessage(scene, "Resurrected");
   },
 };
 

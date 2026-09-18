@@ -1,14 +1,16 @@
 import { DEPTH } from "../constants.js";
-import { drawMenuPanel } from "../ui/menuPanel.js";
+import { drawDialogBorder } from "../ui/menuPanel.js";
 
 /**
  * Short-lived on-screen notifications for events a player should notice but
  * that don't need a modal or a click to dismiss - "Occupied"/"Repaired",
  * and the two-line "Turn N" / "Income +G" banner at the start of each
- * round. Framed in the same navy beveled panel as the main menu (see
- * ui/menuPanel.js's drawMenuPanel) and centered on screen, rather than
- * bare floating text off to one side - reads more like a deliberate
- * announcement than an incidental label.
+ * round. Framed the same way ui/dialogs.js's showBuyMenu (and showConfirm)
+ * are - a flat navy fill (0x1a2038/0.96) plus drawDialogBorder's border.png
+ * corner/edge frame on top - and centered on screen, rather than bare
+ * floating text off to one side - reads more like a deliberate announcement
+ * than an incidental label, and now matches every other dialog's framing
+ * exactly instead of using its own separate rounded-panel look.
  *
  * Queued (see the module-level `queue` below) so two triggers landing close
  * together - e.g. a robot repairing a bridge right after occupying a
@@ -48,7 +50,13 @@ function playOnce(scene, lines) {
     const panelWidth = Math.max(220, ...texts.map((t) => t.width)) + PANEL_PADDING_X * 2;
     const panelX = centerX - panelWidth / 2;
     const panelY = centerY - panelHeight / 2;
-    const panel = drawMenuPanel(scene, panelX, panelY, panelWidth, panelHeight).setScrollFactor(0).setDepth(DEPTH.DIALOG);
+    // Container-relative, same convention as showBuyMenu's own panel: a
+    // plain filled background at (0,0) sized (panelWidth, panelHeight),
+    // then drawDialogBorder overlays the frame on top of it.
+    const panel = scene.add.container(panelX, panelY).setScrollFactor(0).setDepth(DEPTH.DIALOG);
+    const panelBg = scene.add.rectangle(0, 0, panelWidth, panelHeight, 0x1a2038, 0.96).setOrigin(0, 0);
+    panel.add(panelBg);
+    drawDialogBorder(scene, panel, panelWidth, panelHeight);
     texts.forEach((t) => t.setX(centerX)); // re-center now that panelWidth is known, in case it grew past the floor
 
     const targets = [panel, ...texts];

@@ -26,6 +26,37 @@ export function drawMenuPanel(scene, x, y, width, height) {
 }
 
 /**
+ * Draws the original's dialog-window frame - ported from BorderRenderer.
+ * drawBorder(), which BasicDialog (UnitStoreDialog's base class) uses for
+ * every dialog. Four fixed-size corner pieces (frames 0/2/5/7) plus four edge
+ * pieces (1/3/4/6) stretched to fill the gap between them - see border.png's
+ * load call in BoardScene.js for the frame layout. Assumes `container`
+ * already has a filled background rectangle sized (width, height) at (0,0);
+ * this only adds the frame on top of it.
+ *
+ * Lives here (rather than in ui/dialogs.js, where showBuyMenu first used it)
+ * so render/messageBanner.js's notifications and ui/dialogs.js's showConfirm
+ * can both share it without messageBanner.js needing to import the much
+ * heavier dialogs.js module just for this one helper - this file is already
+ * the shared "look" module both of those pull drawMenuPanel from.
+ */
+export function drawDialogBorder(scene, container, width, height, borderSize = 16) {
+  const piece = (frameIndex, x, y, w, h) => {
+    const img = scene.add.image(x, y, "border", frameIndex).setOrigin(0, 0);
+    img.setDisplaySize(w, h);
+    container.add(img);
+  };
+  piece(0, 0, 0, borderSize, borderSize); // top-left corner
+  piece(1, borderSize, 0, width - borderSize * 2, borderSize); // top edge
+  piece(2, width - borderSize, 0, borderSize, borderSize); // top-right corner
+  piece(3, 0, borderSize, borderSize, height - borderSize * 2); // left edge
+  piece(4, width - borderSize, borderSize, borderSize, height - borderSize * 2); // right edge
+  piece(5, 0, height - borderSize, borderSize, borderSize); // bottom-left corner
+  piece(6, borderSize, height - borderSize, width - borderSize * 2, borderSize); // bottom edge
+  piece(7, width - borderSize, height - borderSize, borderSize, borderSize); // bottom-right corner
+}
+
+/**
  * One beveled button row - same visual as the main menu's own entries.
  * `onClick` fires on pointerup when enabled; disabled buttons render dimmed
  * and non-interactive rather than as controls that look functional but
