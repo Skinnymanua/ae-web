@@ -475,6 +475,18 @@ export function applyAttack(game, rule, units, mapInfo, attackerId, defenderId) 
   const defender = units.find((u) => u.id === defenderId);
   const result = resolveAttack(game, rule, attacker, defender);
 
+  // See game-state.js's battleStats doc comment - each ATTACK event's own
+  // attackerId is whoever actually dealt that particular hit (the initial
+  // attacker, or the defender countering back - resolveAttack swaps the
+  // roles for a counter's own event), so crediting that unit's own team,
+  // per event, naturally covers both without needing a separate counter
+  // branch here.
+  for (const event of result.events) {
+    if (event.type !== "ATTACK") continue;
+    const dealer = units.find((u) => u.id === event.attackerId);
+    if (dealer) game.battleStats[dealer.team].damageDealt += event.damage;
+  }
+
   handleUnitDeaths(game, units, result.destroyedUnitIds);
 
   const remaining = units.filter((u) => !result.destroyedUnitIds.includes(u.id));
@@ -501,6 +513,15 @@ export function applyHeal(game, rule, units, mapInfo, healerId, targetId) {
   const healer = units.find((u) => u.id === healerId);
   const target = units.find((u) => u.id === targetId);
   const result = resolveHeal(game, rule, healer, target);
+
+  // Only a genuine heal counts here, not heal-as-damage against an UNDEAD
+  // target (change < 0 there - see resolveHeal/getHealerHeal) - see
+  // game-state.js's battleStats doc comment.
+  for (const event of result.events) {
+    if (event.type === "HEAL" && event.change > 0) {
+      game.battleStats[healer.team].healingDone += event.change;
+    }
+  }
 
   handleUnitDeaths(game, units, result.destroyedUnitIds);
 

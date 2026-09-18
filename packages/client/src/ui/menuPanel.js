@@ -68,11 +68,22 @@ export function drawDialogBorder(scene, container, width, height, borderSize = 1
  * on map selection) can redraw it in place - mirrors ui/dialogs.js's
  * addIconButton and its own identical need.
  */
-export function addMenuButton(scene, x, y, width, height, { label, enabled = true, onClick, fontSize = "17px" }) {
+export function addMenuButton(scene, x, y, width, height, { label, enabled = true, onClick, fontSize = "17px", depth } = {}) {
   const g = scene.add.graphics();
   const text = scene.add.text(x + width / 2, y + height / 2, label, { fontSize, fontStyle: "bold" }).setOrigin(0.5);
   const zone = scene.add.zone(x, y, width, height).setOrigin(0, 0).setInteractive();
   zone.on("pointerup", () => onClick?.());
+  // Optional - every existing caller (MenuScene, SkirmishSetupScene, ...) is
+  // the only overlay on screen at the time and relies on default depth (0),
+  // so this stays a no-op unless a caller passes one; BoardScene's own
+  // showGameOverScreen needs it to sit above its dim overlay/panel (depth
+  // 1000), which addMenuButton's plain scene.add.* calls otherwise render
+  // underneath with no way to fix from outside afterward.
+  if (depth !== undefined) {
+    g.setDepth(depth);
+    text.setDepth(depth);
+    zone.setDepth(depth);
+  }
 
   function draw(isEnabled) {
     g.clear();

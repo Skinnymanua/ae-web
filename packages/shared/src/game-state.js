@@ -175,6 +175,14 @@ export class GameState {
     this.gameOver = false;
     this.tombs = (mapData.tombs ?? []).map((t) => ({ ...t }));
     this.commanderDeaths = {}; // {[team]: number} - read by turn.js's getUnitPrice for repurchase-cost scaling
+    // Cumulative per-team totals for the post-game "Skirmish Battle Summary"
+    // panel (see BoardScene.js's showGameOverScreen) - gold earned via
+    // per-turn income (turn.js's own `.gold +=` site), damage dealt via
+    // combat (combat-resolution.js's applyAttack), and healing done via a
+    // HEALER's heal (applyHeal - a heal-as-damage HEAL event against an
+    // UNDEAD target, change < 0, does NOT count here; only genuine healing
+    // does). Indexed by team, same convention as this.players.
+    this.battleStats = this.players.map(() => ({ goldEarned: 0, damageDealt: 0, healingDone: 0 }));
 
     this._syncTileRefs();
   }

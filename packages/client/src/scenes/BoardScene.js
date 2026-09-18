@@ -1,11 +1,11 @@
 import Phaser from "phaser";
 import { GameState } from "@ae/shared/src/game-state.js";
-import { getWinnerAlliance, PLAYER_TYPE } from "@ae/shared/src/turn.js";
+import { getWinnerAlliance, getCommander, PLAYER_TYPE } from "@ae/shared/src/turn.js";
 import unitsData from "@ae/shared/data/units.json";
 import tilesData from "@ae/shared/data/tiles.json";
 import { MAPS } from "../maps/index.js";
 import { PLAYER_TYPE_OPTIONS, ALLIANCE_OPTIONS } from "./skirmishSettings.js";
-import { TILE_SIZE, BOARD_OFFSET_Y, TEAM_COLOR, getVisibleViewportSize } from "../constants.js";
+import { TILE_SIZE, BOARD_OFFSET_Y, TEAM_COLOR, HUD_ICON, ACTION_ICON, getVisibleViewportSize } from "../constants.js";
 import { BOTTOM_BAR_HEIGHT } from "../ui/bottomBar.js";
 import { deserializeGameState } from "../net/deserializeGameState.js";
 import { setupNetworkedGameSync } from "../net/runGameAction.js";
@@ -15,8 +15,10 @@ import { clearActiveSession } from "../net/sessionPersistence.js";
 
 import { drawTileGrid, updateSelectedTileHighlight, refreshTombs } from "../render/tiles.js";
 import { refreshUnits, animateUnits } from "../render/units.js";
+import { getUnitSpriteKey } from "../render/unitTexture.js";
 import { createHud } from "../ui/hud.js";
 import { createStatsPanel } from "../ui/statsPanel.js";
+import { drawDialogBorder, addMenuButton } from "../ui/menuPanel.js";
 import { onTileClick } from "../input/boardInput.js";
 import { setupCameraDrag } from "../input/cameraDrag.js";
 
@@ -361,61 +363,163 @@ export class BoardScene extends Phaser.Scene {
     // gone server-side), so getWinnerAlliance(this.game_) would incorrectly
     // still show both teams alive.
     const winnerAlliance = this.networked_ ? this.net_.lastWinnerAlliance : getWinnerAlliance(this.game_);
-    const titleText = winnerAlliance >= 0 ? `Team ${winnerAlliance} Wins!` : "Game Over";
-    this.add
-      .text(width / 2, height / 2 - 30, titleText, { fontSize: "32px", color: "#ffdd44", fontStyle: "bold" })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(1001);
+    const subtitleText = winnerAlliance >= 0 ? `Team ${winnerAlliance} Wins!` : "Game Over";
+
+    // Panel styled the same way as ui/dialogs.js's showBuyMenu - a flat navy
+    // fill plus drawDialogBorder's border.png frame - and its own stat rows
+    // built the same way showBuyMenu's addStatBadge pills are (a dark
+    // circular icon backdrop + value), rather than this screen's previous
+    // plain floating text list. Column layout (a row of circular stat-type
+    // badges above a per-team table, portrait circle at each row's left
+    // edge) is modeled on a real screenshot of the mobile reskin's own
+    // "Skirmish Battle Summary" results screen.
+    const ROW_HEIGHT = 36;
+    const numRows = this.game_.players.length; // every slot, active or not - inactive ones render dimmed with "-" (see below), matching the reference rather than omitting them
+    const panelWidth = Math.min(360, width - 20);
+    const titleY = 16;
+    const subtitleY = 42;
+    const dividerAY = 64;
+    const columnHeaderY = 78;
+    const rowsStartY = 100;
+    const dividerBY = rowsStartY + numRows * ROW_HEIGHT + 6;
+    const turnTextY = dividerBY + 16;
+    const buttonRowY = turnTextY + 30;
+    const panelHeight = Math.min(buttonRowY + 40 + 16, height - 20);
+
+    const containerX = width / 2 - panelWidth / 2;
+    const containerY = height / 2 - panelHeight / 2;
+    const container = this.add.container(containerX, containerY);
+    container.setScrollFactor(0);
+    container.setDepth(1000); // above the dim rect (1000) but the game-over content is all added to THIS container, not scene-level, so relative ordering within it is just add-order
+
+    const bg = this.add.rectangle(0, 0, panelWidth, panelHeight, 0x1a2038, 0.96).setOrigin(0, 0);
+    container.add(bg);
+    drawDialogBorder(this, container, panelWidth, panelHeight);
+
+    const titleTextObj = this.add
+      .text(panelWidth / 2, titleY, "Skirmish Battle Summary", { fontSize: "16px", color: "#ffffff", fontStyle: "bold" })
+      .setOrigin(0.5, 0);
+    container.add(titleTextObj);
+
+    const subtitleColor = winnerAlliance >= 0 ? "#ffdd44" : "#cccccc";
+    const subtitleObj = this.add
+      .text(panelWidth / 2, subtitleY, subtitleText, { fontSize: "14px", color: subtitleColor, fontStyle: "bold" })
+      .setOrigin(0.5, 0);
+    container.add(subtitleObj);
 
     if (this.networked_ && winnerAlliance >= 0) {
       const won = winnerAlliance === this.net_.team;
-      this.add
-        .text(width / 2, height / 2 + 10, won ? "Victory!" : "Defeat", {
-          fontSize: "20px",
+      const resultObj = this.add
+        .text(panelWidth / 2, subtitleY + 18, won ? "Victory!" : "Defeat", {
+          fontSize: "13px",
           color: won ? "#44dd88" : "#dd4444",
           fontStyle: "bold",
         })
-        .setOrigin(0.5)
-        .setScrollFactor(0)
-        .setDepth(1001);
+        .setOrigin(0.5, 0);
+      container.add(resultObj);
     }
 
-    // Per-team survivor/gold summary + turn count - this screen never had
-    // any of this before, just the title and Back button. Only teams that
-    // actually took part (PLAYER_TYPE.NONE slots are skipped, matching
-    // turn.js's own isTeamAlive convention for "not a real team") - a local
-    // skirmish only using 2 of its 4 available slots shouldn't show two
-    // empty "0 units" rows.
-    const statsY = height / 2 + 50;
-    this.add
-      .text(width / 2, statsY, `Turn ${this.game_.turn}`, { fontSize: "14px", color: "#cccccc" })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(1001);
+    const divider1 = this.add.rectangle(16, dividerAY, panelWidth - 32, 1, 0xffffff, 0.15).setOrigin(0, 0.5);
+    container.add(divider1);
 
-    const activeTeams = this.game_.players.filter((p) => p.type !== PLAYER_TYPE.NONE).map((p) => p.team);
-    activeTeams.forEach((team, i) => {
-      const unitCount = this.game_.units.filter((u) => u.team === team).length;
-      const gold = this.game_.players[team]?.gold ?? 0;
-      this.add
-        .text(width / 2, statsY + 22 + i * 20, `Team ${team}: ${unitCount} units, ${gold} gold`, {
-          fontSize: "14px",
-          color: `#${TEAM_COLOR[team].toString(16).padStart(6, "0")}`,
-        })
-        .setOrigin(0.5)
-        .setScrollFactor(0)
-        .setDepth(1001);
+    // Column headers: a small circular icon badge per stat type (gold
+    // earned, damage dealt, healing done - see game-state.js's battleStats
+    // doc comment for how these are tallied), centered above each column.
+    // Portrait column on the left has no header of its own, matching the
+    // reference.
+    const portraitColX = 16 + 18; // circle_big badge's own center, sized below
+    const colWidth = (panelWidth - 32 - 44) / 3;
+    const col1X = 16 + 44 + colWidth * 0.5;
+    const col2X = 16 + 44 + colWidth * 1.5;
+    const col3X = 16 + 44 + colWidth * 2.5;
+    const headerRadius = 14;
+    const drawHeaderBadge = (x, iconSheet, iconFrame, iconSize = 16) => {
+      const g = this.add.graphics();
+      g.fillStyle(0x242b47, 1);
+      g.fillCircle(x, columnHeaderY, headerRadius);
+      g.lineStyle(2, 0xb8bec9, 1);
+      g.strokeCircle(x, columnHeaderY, headerRadius);
+      container.add(g);
+      const icon = this.add.image(x, columnHeaderY, iconSheet, iconFrame).setDisplaySize(iconSize, iconSize);
+      container.add(icon);
+    };
+    drawHeaderBadge(col1X, "icons_hud_status", 1); // gold coin - same frame as ui/dialogs.js's own price display
+    drawHeaderBadge(col2X, "icons_hud_battle", HUD_ICON.ATTACK); // sword
+    drawHeaderBadge(col3X, "icons_action", ACTION_ICON.HEAL); // cross - same frame as the action bar's own Heal button
+
+    // Per-team rows. Every slot renders (not just active ones) so the table
+    // always shows the same fixed height regardless of player count,
+    // matching the reference's own dimmed placeholder rows - an inactive
+    // slot gets an empty portrait ring and "-" in every column rather than
+    // being skipped entirely.
+    this.game_.players.forEach((player, i) => {
+      const team = player.team;
+      const rowY = rowsStartY + i * ROW_HEIGHT + ROW_HEIGHT / 2;
+      const active = player.type !== PLAYER_TYPE.NONE;
+      const stats = this.game_.battleStats[team] ?? { goldEarned: 0, damageDealt: 0, healingDone: 0 };
+
+      const badge = this.add.image(portraitColX, rowY, "circle_big", 0).setDisplaySize(32, 32);
+      if (!active) badge.setAlpha(0.35);
+      container.add(badge);
+
+      if (active) {
+        // Prefer the team's living commander (matches the reference's own
+        // portraits, which are each team's leader); fall back to any
+        // remaining unit if the commander already died but the team
+        // otherwise survived (only possible in a 3+-team game where this
+        // team isn't the one that triggered game over).
+        const portraitUnit = getCommander(this.game_.units, team) ?? this.game_.units.find((u) => u.team === team);
+        if (portraitUnit) {
+          const { key, frame } = getUnitSpriteKey(portraitUnit.unitIndex, team);
+          const sprite = this.add.sprite(portraitColX, rowY, key, frame).setDisplaySize(26, 26);
+          container.add(sprite);
+          if (portraitUnit.isCommander) {
+            const headSize = 26;
+            const head = this.add
+              .image(portraitColX - headSize / 2 + (headSize * 7) / 24, rowY - headSize / 2, "heads", portraitUnit.head ?? 0)
+              .setOrigin(0, 0)
+              .setDisplaySize((headSize * 13) / 24, (headSize * 12) / 24);
+            container.add(head);
+          }
+        }
+      }
+
+      const valueColor = active ? `#${TEAM_COLOR[team].toString(16).padStart(6, "0")}` : "#666677";
+      const addCell = (x, value) => {
+        if (!active) {
+          const dash = this.add.text(x, rowY, "-", { fontSize: "14px", color: "#666677" }).setOrigin(0.5);
+          container.add(dash);
+          return;
+        }
+        const icon = this.add.image(x - 4, rowY, "icons_hud_status", 1).setDisplaySize(12, 12).setOrigin(1, 0.5);
+        const text = this.add
+          .text(x, rowY, String(value), { fontSize: "14px", color: valueColor, fontStyle: "bold" })
+          .setOrigin(0, 0.5);
+        container.add([icon, text]);
+      };
+      addCell(col1X - colWidth * 0.3, stats.goldEarned);
+      addCell(col2X - colWidth * 0.3, stats.damageDealt);
+      addCell(col3X - colWidth * 0.3, stats.healingDone);
     });
 
-    const backButton = this.add
-      .text(width / 2, statsY + 40 + activeTeams.length * 20, "[ Back to Menu ]", { fontSize: "18px", color: "#44aaff" })
-      .setOrigin(0.5)
-      .setInteractive()
-      .setScrollFactor(0)
-      .setDepth(1001);
-    backButton.on("pointerup", (pointer, localX, localY, event) => {
-      event.stopPropagation();
+    const divider2 = this.add.rectangle(16, dividerBY, panelWidth - 32, 1, 0xffffff, 0.15).setOrigin(0, 0.5);
+    container.add(divider2);
+
+    const turnTextObj = this.add
+      .text(panelWidth / 2, turnTextY, `Turn ${this.game_.turn}`, { fontSize: "13px", color: "#cccccc" })
+      .setOrigin(0.5, 0);
+    container.add(turnTextObj);
+
+    // Main Menu / Play Again - same rounded beveled button ui/menuPanel.js's
+    // addMenuButton already draws for the main menu itself, matching the
+    // reference's own two rectangular buttons (rather than this screen's
+    // previous single bracketed-text link). Play Again only makes sense for
+    // local skirmish - a networked session is already gone server-side by
+    // this point (see this method's own docstring above), so there's
+    // nothing to "play again" into; networked mode gets a single
+    // full-width Main Menu button instead.
+    const buttonHeight = 32;
+    const goToMenu = () => {
       if (this.networked_ && this.net_?.socket) {
         // The session is already gone server-side at this point (see this
         // method's own docstring above), but clear the client's persisted
@@ -426,7 +530,35 @@ export class BoardScene extends Phaser.Scene {
         this.net_.socket.close();
       }
       this.scene.start("MenuScene");
-    });
+    };
+
+    // addMenuButton (unlike addIconButton) draws at absolute scene
+    // coordinates rather than being container-parented, so its own x/y need
+    // containerX/containerY folded in explicitly - everything else in this
+    // panel is added to `container` and positioned container-locally, but
+    // these two buttons can't be.
+    if (this.networked_) {
+      addMenuButton(this, containerX + 16, containerY + buttonRowY, panelWidth - 32, buttonHeight, { label: "Main Menu", onClick: goToMenu, depth: 1001 });
+    } else {
+      const buttonGap = 8;
+      const buttonWidth = (panelWidth - 32 - buttonGap) / 2;
+      addMenuButton(this, containerX + 16, containerY + buttonRowY, buttonWidth, buttonHeight, { label: "Main Menu", onClick: goToMenu, depth: 1001 });
+      addMenuButton(this, containerX + 16 + buttonWidth + buttonGap, containerY + buttonRowY, buttonWidth, buttonHeight, {
+        label: "Play Again",
+        depth: 1001,
+        onClick: () => {
+          this.scene.start("BoardScene", {
+            mapData: this.mapData_,
+            maxLevel: this.maxLevel_,
+            startingGold: this.startingGold_,
+            unitCapacity: this.unitCapacity_,
+            playerCount: this.playerCount_,
+            playerTypeIndices: this.playerTypeIndices_,
+            allianceIndices: this.allianceIndices_,
+          });
+        },
+      });
+    }
   }
 
     update(time, delta) {

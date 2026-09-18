@@ -138,6 +138,7 @@ function getCommanderIncome(game, units, team) {
 export function gainIncome(game, units, mapInfo, team) {
   const income = calcIncome(game, units, mapInfo, team);
   game.players[team].gold += income;
+  game.battleStats[team].goldEarned += income; // see game-state.js's own battleStats doc comment
   return income;
 }
 
