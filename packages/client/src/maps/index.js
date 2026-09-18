@@ -18,6 +18,14 @@ export const MAPS = Object.entries(modules)
       width: data.width,
       height: data.height,
       unitCount: data.units?.length ?? 0,
+      // Ported from Map#hasTeamAccess/getPlayerCount - which team SLOTS this
+      // map actually supports, not just how many units happen to be on it
+      // (classic-2.json is [true, false, true, true]: team 1 specifically
+      // has no access even though teams 2/3 do, so this can't be derived
+      // from a simple max-team-index or unit count). Falls back to "all 4"
+      // for any map missing the field entirely, rather than leaving every
+      // team row hidden.
+      teamAccess: data.teamAccess ?? [true, true, true, true],
       data,
     };
   })

@@ -110,6 +110,15 @@ export class SkirmishSettingsScene extends Phaser.Scene {
     this.returnScene = data?.returnScene ?? "SkirmishSetupScene";
     this.returnExtra = data?.returnExtra ?? {};
     this.isLocalSkirmish = this.returnScene === "SkirmishSetupScene";
+    // Which of the 4 team slots the selected map actually supports (see
+    // maps/index.js's own doc comment on this field) - drives which team
+    // rows rebuildTeamRows renders below. Not meaningful for the networked
+    // reuse (no map chosen yet at this step there), so left at "all 4" -
+    // isLocalSkirmish already gates every other place this matters.
+    const selectedMap = this.isLocalSkirmish ? MAPS.find((m) => m.id === this.selectedMapId) : null;
+    this.accessibleTeams = (selectedMap?.teamAccess ?? [true, true, true, true])
+      .map((hasAccess, team) => (hasAccess ? team : null))
+      .filter((team) => team !== null);
     // Reset here, not just left to buildFooterButtons() to (re)create -
     // Phaser reuses this same scene INSTANCE on every visit rather than
     // constructing a fresh one, so without this, a second+ visit's
@@ -188,11 +197,13 @@ export class SkirmishSettingsScene extends Phaser.Scene {
     this.optionRowObjects = [];
 
     const { height } = this.cameras.main;
-    // Always 4 for local skirmish now (see class doc + the optionRows
-    // comment above) - every slot renders, defaulting to None until its
-    // own Player Type stepper turns it into something. The networked reuse
-    // still goes through the Players option row above instead.
-    const playerCount = this.isLocalSkirmish ? 4 : PLAYER_COUNT_OPTIONS[this.playerCountIndex];
+    // For local skirmish this is now however many teams the selected map
+    // actually grants access to (see init()'s accessibleTeams), not always
+    // 4 - a 2-player map like duel.json only ever shows 2 rows, since the
+    // other two team slots don't exist on that map at all (see
+    // rebuildTeamRows). The networked reuse still goes through the Players
+    // option row above instead.
+    const playerCount = this.isLocalSkirmish ? this.accessibleTeams.length : PLAYER_COUNT_OPTIONS[this.playerCountIndex];
     const teamSectionHeight = this.isLocalSkirmish ? TEAM_SECTION_GAP + 24 + playerCount * TEAM_ROW_HEIGHT : 0;
     const panelHeight = 30 + this.optionRows.length * OPTION_ROW_HEIGHT + teamSectionHeight + 20;
 
@@ -241,8 +252,17 @@ export class SkirmishSettingsScene extends Phaser.Scene {
 
     const previousTypes = this.playerTypeIndices ?? [];
     const previousAlliances = this.allianceIndices ?? [];
-    this.playerTypeIndices = Array.from({ length: playerCount }, (_, team) => previousTypes[team] ?? defaultPlayerTypeIndex(team));
-    this.allianceIndices = Array.from({ length: playerCount }, (_, team) => previousAlliances[team] ?? defaultAllianceIndex(team));
+    // Always a full 4-length array regardless of how many rows actually
+    // render (BoardScene#startGame always sends playerCount: 4 - see its
+    // own comment there) - a team the map has no access to (see
+    // init()'s accessibleTeams) is forced to "None" here rather than left
+    // at whatever default/previous value it'd otherwise get, since there's
+    // no row for it to ever be edited back away from that.
+    const NONE_TYPE_INDEX = PLAYER_TYPE_OPTIONS.findIndex((o) => o.label === "None");
+    this.playerTypeIndices = Array.from({ length: 4 }, (_, team) =>
+      this.accessibleTeams.includes(team) ? previousTypes[team] ?? defaultPlayerTypeIndex(team) : NONE_TYPE_INDEX
+    );
+    this.allianceIndices = Array.from({ length: 4 }, (_, team) => previousAlliances[team] ?? defaultAllianceIndex(team));
 
     const colX = this.panelX + 24;
     // Player Type/Alliance column positions are relative to panelWidth
@@ -260,8 +280,14 @@ export class SkirmishSettingsScene extends Phaser.Scene {
       this.add.text(allianceStepperX - 33, startY, "Alliance", { fontSize: "13px", color: "#999999" })
     );
 
-    for (let team = 0; team < playerCount; team++) {
-      const y = startY + 24 + team * TEAM_ROW_HEIGHT;
+    // Only a row per team the map actually grants access to (see init()'s
+    // accessibleTeams) - `row` is this row's on-screen position (0, 1, 2...
+    // however many rows there are), `team` is the real team index (0-3)
+    // that row controls, which can now skip around (e.g. team 0's row
+    // directly followed by team 2's, on a map like classic-2.json that has
+    // no access for team 1 at all).
+    this.accessibleTeams.forEach((team, row) => {
+      const y = startY + 24 + row * TEAM_ROW_HEIGHT;
       const iconCx = colX + SWATCH_SIZE / 2;
       const iconCy = y + SWATCH_SIZE / 2;
       const iconRadius = SWATCH_SIZE / 2;
@@ -327,7 +353,7 @@ export class SkirmishSettingsScene extends Phaser.Scene {
         },
       });
       this.teamRowObjects.push(allianceStepper.label, allianceStepper.minusButton, allianceStepper.plusButton);
-    }
+    });
 
     this.updateStartButton();
   }
