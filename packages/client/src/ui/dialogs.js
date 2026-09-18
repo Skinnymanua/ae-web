@@ -4,6 +4,7 @@ import unitDescriptions from "@ae/shared/data/unit-descriptions.json";
 import { createPurchaseStrip } from "./purchaseStrip.js";
 import { purchaseUnit } from "../input/boardInput.js";
 import { getUnitSpriteKey } from "../render/unitTexture.js";
+import { drawMenuPanel } from "./menuPanel.js";
 import { DEPTH, HUD_ICON, STAT_ICON, PHYSICAL_ATTACK_COLOR, MAGIC_ATTACK_COLOR } from "../constants.js";
 
 // Shared sizing for every icon+value pair in this panel. A single fixed icon
@@ -159,27 +160,63 @@ function addIconButton(scene, container, x, y, radius, iconType) {
   };
 }
 
-/** Simple modal Yes/No confirm box. Sets scene.modalOpen while shown, blocking board input. */
+/** Simple modal Yes/No confirm box. Sets scene.modalOpen while shown, blocking
+ * board input.
+ *
+ * Framed with drawMenuPanel - the same navy beveled panel render/messageBanner.js
+ * uses for its own notifications - instead of the old plain black rectangle +
+ * white stroke, so a confirm prompt and a passive notification now read as the
+ * same family of UI rather than two different dialog styles. Sizing follows
+ * messageBanner.js's own playOnce exactly: measure the wrapped text first,
+ * pad it out (PANEL_PADDING_X/Y), floor the width so a short message doesn't
+ * draw a comically narrow box.
+ *
+ * Confirm/cancel buttons are fixed at the screen's bottom corners
+ * (container=null - see addIconButton's own docstring) rather than inside the
+ * panel itself - same placement showBuyMenu's own Buy/Cancel use, for the
+ * same reason: they stay put regardless of how tall the message above them
+ * ends up being, and a person already knows where to tap for "confirm" /
+ * "back" from the buy menu without re-learning a new spot for this dialog. */
 export function showConfirm(scene, message, onYes, onNo) {
   scene.modalOpen = true;
   const cam = scene.cameras.main;
-  const container = scene.add.container(cam.width / 2, cam.height / 2);
-  container.setScrollFactor(0);
-  // Above the stats bars too (see constants.js DEPTH) — a modal must always
-  // read as topmost, same reasoning as the stats-bar fix: units/bars get
-  // recreated during play and would otherwise climb back over a static-depth dialog.
-  container.setDepth(DEPTH.DIALOG);
-  const bg = scene.add.rectangle(0, 0, 260, 110, 0x000000, 0.9).setStrokeStyle(2, 0xffffff);
+
+  const PANEL_PADDING_X = 32;
+  const PANEL_PADDING_Y = 18;
+  const wrapWidth = Math.min(260, cam.width - 40);
+
   const text = scene.add
-    .text(0, -30, message, { fontSize: "14px", color: "#ffffff", wordWrap: { width: 230 }, align: "center" })
-    .setOrigin(0.5, 0.5);
-  container.add([bg, text]);
-  const yesButton = addIconButton(scene, container, -40, 30, 18, "confirm");
-  const noButton = addIconButton(scene, container, 40, 30, 18, "cancel");
+    .text(0, 0, message, { fontSize: "16px", color: "#ffffff", fontStyle: "bold", wordWrap: { width: wrapWidth }, align: "center" })
+    .setOrigin(0.5)
+    .setScrollFactor(0)
+    .setDepth(DEPTH.DIALOG + 1);
+
+  const panelWidth = Math.max(220, text.width) + PANEL_PADDING_X * 2;
+  const panelHeight = text.height + PANEL_PADDING_Y * 2;
+  const panelX = cam.width / 2 - panelWidth / 2;
+  const panelY = cam.height / 2 - panelHeight / 2;
+  const panel = drawMenuPanel(scene, panelX, panelY, panelWidth, panelHeight).setScrollFactor(0).setDepth(DEPTH.DIALOG);
+  text.setPosition(cam.width / 2, cam.height / 2);
+
+  // Same fixed bottom-corner spot as showBuyMenu's own buyButton/cancelButton
+  // (cleared above BOTTOM_BAR_HEIGHT - 44px, duplicated as a literal here for
+  // the same "importing back would be circular" reason showBuyMenu's own
+  // comment gives).
+  const buttonY = cam.height - 44 - 36;
+  const yesButton = addIconButton(scene, null, 50, buttonY, 24, "confirm");
+  const noButton = addIconButton(scene, null, cam.width - 50, buttonY, 24, "cancel");
+
+  function cleanup() {
+    scene.modalOpen = false;
+    panel.destroy();
+    text.destroy();
+    yesButton.destroy();
+    noButton.destroy();
+  }
 
   // pointerup (not pointerdown), with stopPropagation - matches the action
   // bar's own icons (see ui/actionBar.js's showActionBar comment on this
-  // exact issue). A pointerdown here fires and destroys `container`
+  // exact issue). A pointerdown here fires and destroys everything
   // synchronously; the pointerup half of the same click/tap then finds
   // nothing left at this screen position and falls through to whatever tile
   // sprite is underneath (tiles listen on pointerup - see
@@ -188,14 +225,12 @@ export function showConfirm(scene, message, onYes, onNo) {
   // event here instead of letting it leak through.
   yesButton.zone.on("pointerup", (pointer, localX, localY, event) => {
     event.stopPropagation();
-    scene.modalOpen = false;
-    container.destroy();
+    cleanup();
     onYes?.();
   });
   noButton.zone.on("pointerup", (pointer, localX, localY, event) => {
     event.stopPropagation();
-    scene.modalOpen = false;
-    container.destroy();
+    cleanup();
     onNo?.();
   });
 }
