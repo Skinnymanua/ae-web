@@ -379,7 +379,7 @@ export class BoardScene extends Phaser.Scene {
     const titleY = 16;
     const subtitleY = 42;
     const dividerAY = 64;
-    const columnHeaderY = 78;
+    const columnHeaderY = 85;
     const rowsStartY = 100;
     const dividerBY = rowsStartY + numRows * ROW_HEIGHT + 6;
     const turnTextY = dividerBY + 16;
@@ -419,7 +419,7 @@ export class BoardScene extends Phaser.Scene {
       container.add(resultObj);
     }
 
-    const divider1 = this.add.rectangle(16, dividerAY, panelWidth - 32, 1, 0xffffff, 0.15).setOrigin(0, 0.5);
+    const divider1 = this.add.rectangle(16, dividerAY, panelWidth - 12, 1, 0xffffff, 0.15).setOrigin(0, 0.5);
     container.add(divider1);
 
     // Column headers: a small circular icon badge per stat type (gold
@@ -429,18 +429,18 @@ export class BoardScene extends Phaser.Scene {
     // reference.
     const portraitColX = 16 + 18; // circle_big badge's own center, sized below
     const colWidth = (panelWidth - 32 - 44) / 3;
-    const col1X = 16 + 44 + colWidth * 0.5;
-    const col2X = 16 + 44 + colWidth * 1.5;
-    const col3X = 16 + 44 + colWidth * 2.5;
+    const col1X = 44 + 44 + colWidth * 0.5;
+    const col2X = 44 + 44 + colWidth * 1.5;
+    const col3X = 44 + 44 + colWidth * 2.5;
     const headerRadius = 14;
     const drawHeaderBadge = (x, iconSheet, iconFrame, iconSize = 16) => {
       const g = this.add.graphics();
       g.fillStyle(0x242b47, 1);
-      g.fillCircle(x, columnHeaderY, headerRadius);
+      g.fillCircle(x - 30, columnHeaderY, headerRadius);
       g.lineStyle(2, 0xb8bec9, 1);
-      g.strokeCircle(x, columnHeaderY, headerRadius);
+      g.strokeCircle(x - 30, columnHeaderY, headerRadius);
       container.add(g);
-      const icon = this.add.image(x, columnHeaderY, iconSheet, iconFrame).setDisplaySize(iconSize, iconSize);
+      const icon = this.add.image(x - 30, columnHeaderY, iconSheet, iconFrame).setDisplaySize(iconSize, iconSize);
       container.add(icon);
     };
     drawHeaderBadge(col1X, "icons_hud_status", 1); // gold coin - same frame as ui/dialogs.js's own price display
