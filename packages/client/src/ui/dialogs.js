@@ -52,6 +52,62 @@ function addIconValueRight(scene, container, y, iconSheet, iconFrame, fontSize, 
 }
 
 /**
+ * One "stat badge" - a rounded pill (matches the mobile reskin's own stat
+ * row - see a real screenshot of that dialog for the reference this is
+ * built from) with a dark circular icon backdrop (same navy fill as
+ * addIconButton's own circles, for visual consistency with every other
+ * circular badge in this file - the purchase strip's unit portraits
+ * included) on its left end, and bold value text filling the rest of the
+ * pill. Replaces the old addIconValueLeft's bare icon+text pair for the
+ * attack/mdef/pdef/move row specifically - the price/range/population row
+ * above it (addIconValueRight) is untouched, since the reference keeps
+ * that row as plain icon+text and only pill-badges the row below it.
+ *
+ * `width`/`height` describe the pill itself; the circle is inscribed in the
+ * pill's left end (diameter = height, minus a couple pixels so its ring
+ * doesn't touch the pill's own rounded edge) and the text starts right
+ * after it. Returns the text object so selectUnit() can still update its
+ * value/color per-unit exactly as it did with addIconValueLeft's return.
+ */
+function addStatBadge(scene, container, x, y, width, height, iconSheet, iconFrame, fontSize, textColor, iconSize = 16) {
+  const pillG = scene.add.graphics();
+  pillG.fillStyle(0x3a4160, 0.7);
+  pillG.fillRoundedRect(x, y, width, height, height / 2);
+  container.add(pillG);
+
+  const circleRadius = height / 2 - 2;
+  const circleX = x + height / 2;
+  const circleY = y + height / 2;
+  const circleG = scene.add.graphics();
+  circleG.fillStyle(0x242b47, 1);
+  circleG.fillCircle(circleX, circleY, circleRadius);
+  container.add(circleG);
+
+  const icon = scene.add.image(circleX, circleY, iconSheet, iconFrame).setDisplaySize(iconSize, iconSize);
+  container.add(icon);
+
+  const text = scene.add
+    .text(x + height + 2, circleY, "", { fontSize: `${fontSize}px`, color: textColor, fontStyle: "bold" })
+    .setOrigin(0, 0.5);
+  container.add(text);
+  return text;
+}
+
+/**
+ * Thin horizontal rule spanning the panel's own content width (same 16px
+ * margins as nameText/descText/the stat row below) - separates the
+ * header/stats/description/portrait-strip sections from each other,
+ * matching the reference screenshot's own dividers. Returns the rectangle
+ * so callers don't need to, but nothing currently needs to touch it after
+ * creation - it's static chrome, same as the panel background itself.
+ */
+function addDivider(scene, container, panelWidth, y) {
+  const line = scene.add.rectangle(16, y, panelWidth - 32, 1, 0xffffff, 0.15).setOrigin(0, 0.5);
+  container.add(line);
+  return line;
+}
+
+/**
  * Circular confirm/cancel-style icon button matching the mobile reskin's
  * own bottom-corner controls (navy circle, silver ring, yellow glyph) - see
  * a real screenshot of that game's buy dialog for the reference this is
@@ -290,9 +346,15 @@ export function showBuyMenu(scene, castleX, castleY) {
   measure.destroy();
   const descBlockHeight = maxDescLines * (descFontSize + descLineSpacing);
 
-  const statY = 46;
-  const descY = statY + 32;
-  const stripY = descY + descBlockHeight + 12; // Buy/Cancel now live at the screen's bottom corners (see below), not a dedicated row inside the panel
+  // Header row (name/price/range/population) / stat pills / description /
+  // portrait strip - each separated by a thin divider (see addDivider),
+  // matching the reference screenshot's own section breaks.
+  const STAT_PILL_HEIGHT = 28;
+  const dividerAY = 38;
+  const statY = dividerAY + 10;
+  const descY = statY + STAT_PILL_HEIGHT + 14;
+  const dividerBY = descY + descBlockHeight + 8;
+  const stripY = dividerBY + 14; // Buy/Cancel now live at the screen's bottom corners (see below), not a dedicated row inside the panel
   const panelHeight = Math.min(stripY + stripHeight + 16, cam.height - 20);
 
   const container = scene.add.container(cam.width / 2 - panelWidth / 2, cam.height / 2 - panelHeight / 2);
@@ -353,20 +415,23 @@ export function showBuyMenu(scene, castleX, castleY) {
   const rangeGroup = addIconValueRight(scene, container, priceRowY, "icons_hud_status", 2, 13, "#ffffff");
   const goldGroup = addIconValueRight(scene, container, priceRowY, "icons_hud_status", 1, 14, "#ffdd44");
 
+  addDivider(scene, container, panelWidth, dividerAY);
+
   // Stats row: attack (single value, color-coded physical/magic - the
   // original has no separate magic-attack slot, see UnitStoreDialog.label_attack),
   // magic defence, physical defence, move. This order (not the naive atk/move/
   // pdef/mdef row-major reading of the original's 2x2 Table grid - attack+move
   // on row 1, pdef+mdef on row 2) matches the reference screenshot's actual
   // single-row layout, which is from the commercial reskin, not the plain
-  // open-source UnitStoreDialog. All four share STAT_ICON_SIZE so the
-  // icon-to-text gap is identical in every column.
-  const statW = (panelWidth - 32) / 4;
-  const statRowY = statY + 8;
-  const atkText = addIconValueLeft(scene, container, 16 + statW * 0, statRowY, "icons_hud_battle", HUD_ICON.ATTACK, 14, "#88ee88");
-  const mdefText = addIconValueLeft(scene, container, 16 + statW * 1, statRowY, "icons_action", STAT_ICON.MDEF, 14, "#88ee88");
-  const pdefText = addIconValueLeft(scene, container, 16 + statW * 2, statRowY, "icons_hud_battle", HUD_ICON.PDEF, 14, "#ffffff");
-  const moveText = addIconValueLeft(scene, container, 16 + statW * 3, statRowY, "icons_action", STAT_ICON.MOVE, 14, "#ffffff");
+  // open-source UnitStoreDialog. Each stat is its own circular-icon pill
+  // (see addStatBadge) rather than a bare icon+text pair, matching that
+  // same reference's stat row styling.
+  const statPillGap = 6;
+  const statPillWidth = (panelWidth - 32 - statPillGap * 3) / 4;
+  const atkText = addStatBadge(scene, container, 16 + (statPillWidth + statPillGap) * 0, statY, statPillWidth, STAT_PILL_HEIGHT, "icons_hud_battle", HUD_ICON.ATTACK, 14, "#88ee88");
+  const mdefText = addStatBadge(scene, container, 16 + (statPillWidth + statPillGap) * 1, statY, statPillWidth, STAT_PILL_HEIGHT, "icons_action", STAT_ICON.MDEF, 14, "#88ee88");
+  const pdefText = addStatBadge(scene, container, 16 + (statPillWidth + statPillGap) * 2, statY, statPillWidth, STAT_PILL_HEIGHT, "icons_hud_battle", HUD_ICON.PDEF, 14, "#ffffff");
+  const moveText = addStatBadge(scene, container, 16 + (statPillWidth + statPillGap) * 3, statY, statPillWidth, STAT_PILL_HEIGHT, "icons_action", STAT_ICON.MOVE, 14, "#ffffff");
 
   const descText = scene.add.text(16, descY, "", {
     fontSize: `${descFontSize}px`,
@@ -375,6 +440,8 @@ export function showBuyMenu(scene, castleX, castleY) {
     lineSpacing: descLineSpacing,
   });
   container.add(descText);
+
+  addDivider(scene, container, panelWidth, dividerBY);
 
   // Fixed at the screen's bottom corners (container=null - see
   // addIconButton's own docstring), not inside the dialog panel - matches
