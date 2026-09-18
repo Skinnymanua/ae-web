@@ -69,10 +69,22 @@ export function drawDialogBorder(scene, container, width, height, borderSize = 1
  * addIconButton and its own identical need.
  */
 export function addMenuButton(scene, x, y, width, height, { label, enabled = true, onClick, fontSize = "17px", depth } = {}) {
-  const g = scene.add.graphics();
-  const text = scene.add.text(x + width / 2, y + height / 2, label, { fontSize, fontStyle: "bold" }).setOrigin(0.5);
-  const zone = scene.add.zone(x, y, width, height).setOrigin(0, 0).setInteractive();
+  const g = scene.add.graphics().setScrollFactor(0);
+  const text = scene.add.text(x + width / 2, y + height / 2, label, { fontSize, fontStyle: "bold" }).setOrigin(0.5).setScrollFactor(0);
+  const zone = scene.add.zone(x, y, width, height).setOrigin(0, 0).setInteractive().setScrollFactor(0);
   zone.on("pointerup", () => onClick?.());
+  // setScrollFactor(0) matters here even though every existing caller
+  // (MenuScene, SkirmishSetupScene, ...) happens not to need it - those
+  // scenes' cameras never scroll, so the missing pin was invisible there.
+  // BoardScene's own showGameOverScreen (the first caller whose scene DOES
+  // scroll, following units around the board all game) exposed it: without
+  // this, these three elements render at (x,y) minus however far the
+  // camera has panned by the time the game ends, landing the whole button
+  // wherever the camera's last scroll position happens to put it instead
+  // of pinned to the panel it's meant to sit in - the panel and everything
+  // else in it already has this because ui/dialogs.js's own equivalents
+  // (addIconButton, etc.) and BoardScene's own dim rect/container all set
+  // it explicitly.
   // Optional - every existing caller (MenuScene, SkirmishSetupScene, ...) is
   // the only overlay on screen at the time and relies on default depth (0),
   // so this stays a no-op unless a caller passes one; BoardScene's own

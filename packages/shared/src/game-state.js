@@ -47,6 +47,7 @@ import {
   isTomb,
   removeTomb,
   updateTombs,
+  PLAYER_TYPE,
 } from "./turn.js";
 
 function hasAbility(unit, abilityId) {
@@ -156,10 +157,42 @@ export class GameState {
     // mutable copy — capture events rewrite entries in place
     this.tileIndices = mapData.tiles.map((col) => [...col]);
 
-    this.units = mapData.units.map((placement) => {
-      const def = unitDefs.find((u) => u.index === placement.unitIndex);
-      return instantiateUnit(def, { team: placement.team, x: placement.x, y: placement.y });
-    });
+    // Ported from GameCore#initialize(): "if a player slot is NONE, remove
+    // that team from the map" (getMap().removeTeam(team) there). A map
+    // built for more players than this particular game uses (e.g. a
+    // 4-player map played 2v-nobody) can still have real units pre-placed
+    // for the unused team slots - a commander-only map has nothing to
+    // remove there so this was never noticed on those, but any map that
+    // pre-places actual units for team 2/3 spawned them anyway, as fully
+    // active enemies, even though those slots were set to "None". Filtered
+    // BEFORE population is computed below (from this.units), and before
+    // player.type even exists here yet - so this reads the raw incoming
+    // `players` array's own `.type`, not `this.players`.
+    const activeTeams = new Set(players.filter((p) => p.type !== PLAYER_TYPE.NONE).map((p) => p.team));
+    this.units = mapData.units
+      .filter((placement) => activeTeams.has(placement.team))
+      .map((placement) => {
+        const def = unitDefs.find((u) => u.index === placement.unitIndex);
+        return instantiateUnit(def, { team: placement.team, x: placement.x, y: placement.y });
+      });
+
+    // Other half of removeTeam: a capturable tile (castle/village) owned by
+    // a now-removed team resets to its own neutral variant - ported from
+    // Tile#getCapturedTileIndex(team), which returns capturedTileList[4]
+    // (the neutral entry - see tiles.json: a village's own list is
+    // [team0, team1, team2, team3, neutral]) for any team outside 0..3,
+    // matching the -1 the original always passes here. Without this, a
+    // map's pre-owned castle/village for an inactive team keeps showing
+    // that team's banner/color and stays capturable exactly as if that
+    // team still existed, even though its units are already gone.
+    for (let x = 0; x < this.width; x++) {
+      for (let y = 0; y < this.height; y++) {
+        const tile = tileDefs[this.tileIndices[x][y]];
+        if (tile.capturable && tile.team >= 0 && !activeTeams.has(tile.team)) {
+          this.tileIndices[x][y] = tile.capturedTileList[4];
+        }
+      }
+    }
 
     this.players = players.map((p) => ({ population: 0, gold: 0, ...p }));
     for (const player of this.players) {
