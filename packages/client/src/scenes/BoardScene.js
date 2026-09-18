@@ -339,7 +339,13 @@ export class BoardScene extends Phaser.Scene {
     const { width, height } = this.cameras.main;
     this.modalOpen = true; // blocks further board/bottom-bar clicks - same flag ui/dialogs.js's own modals use
 
-    this.add.rectangle(0, 0, width, height, 0x000000, 0.65).setScrollFactor(0).setDepth(1000);
+    // setOrigin(0, 0) matters here - rectangle defaults to a CENTER origin
+    // (0.5, 0.5), so without it this rect (positioned at 0,0) actually spans
+    // from -width/2,-height/2 to width/2,height/2: only its bottom-right
+    // quarter ever lands on-screen, dimming roughly the top-left quadrant
+    // instead of the whole screen and leaving the rest - the right-side
+    // stats panel included - undimmed.
+    this.add.rectangle(0, 0, width, height, 0x000000, 0.65).setOrigin(0, 0).setScrollFactor(0).setDepth(1000);
 
     // getWinnerAlliance returns an ALLIANCE number, not a team number - for
     // local skirmish and today's 2-player networked games these are the
