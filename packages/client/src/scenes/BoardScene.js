@@ -175,6 +175,16 @@ export class BoardScene extends Phaser.Scene {
       frameWidth: 7,
       frameHeight: 9,
     });
+    // Ported from android/assets/images/level.png (3 frames of 7x9, one per
+    // level 1-3 - units are capped at level 3, see combat-resolution.js's
+    // gainExperience) - the small on-board level badge CanvasRenderer draws
+    // at a leveled unit's tile corner, separate from the plain-text level
+    // shown in ui/statsPanel.js's detail view. See render/units.js's
+    // refreshUnits for where this actually gets drawn.
+    this.load.spritesheet("level", "/images/level.png", {
+      frameWidth: 7,
+      frameHeight: 9,
+    });
     // Ported from android/assets/images/tombstone.png - a single 24x24 image
     // (not a spritesheet), drawn at full tile size the same way tile_N.png's
     // source resolution doesn't matter - see render/tiles.js's refreshTombs.
@@ -290,6 +300,7 @@ export class BoardScene extends Phaser.Scene {
     // need a real starting value before its first call.
     this.hpDigitSprites = {};
     this.statusIconSprites = {};
+    this.levelBadgeSprites = {};
     this.actionBarContainer = null;
     this.elapsedMs = 0;
 

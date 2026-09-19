@@ -274,15 +274,15 @@ export function resolveHeal(game, rule, healer, target) {
     events.push({ type: "HEAL", healerId: healer.id, targetId: target.id, change });
     destroyedUnitIds.push(target.id);
     events.push({ type: "UNIT_DESTROY", unitId: target.id, killedBy: healer.id });
-    gainExperience(healer, rule.killExperience, rule.maxLevel);
-    events.push({ type: "GAIN_EXPERIENCE", unitId: healer.id, amount: rule.killExperience });
+    const leveledUp = gainExperience(healer, rule.killExperience, rule.maxLevel);
+    events.push({ type: "GAIN_EXPERIENCE", unitId: healer.id, amount: rule.killExperience, leveledUp });
   } else {
     // No ceiling clamp here - matches OperationExecutor#onHeal's own
     // non-lethal branch exactly (see clampHealChange's docstring above).
     target.currentHp += heal;
     events.push({ type: "HEAL", healerId: healer.id, targetId: target.id, change: heal });
-    gainExperience(healer, rule.attackExperience, rule.maxLevel);
-    events.push({ type: "GAIN_EXPERIENCE", unitId: healer.id, amount: rule.attackExperience });
+    const leveledUp = gainExperience(healer, rule.attackExperience, rule.maxLevel);
+    events.push({ type: "GAIN_EXPERIENCE", unitId: healer.id, amount: rule.attackExperience, leveledUp });
   }
 
   return { heal, destroyedUnitIds, events };
@@ -394,11 +394,11 @@ export function resolveAttack(game, rule, attacker, defender) {
   if (defender.currentHp <= 0) {
     destroyedUnitIds.push(defender.id);
     events.push({ type: "UNIT_DESTROY", unitId: defender.id, killedBy: attacker.id });
-    gainExperience(attacker, rule.killExperience, rule.maxLevel);
-    events.push({ type: "GAIN_EXPERIENCE", unitId: attacker.id, amount: rule.killExperience });
+    const leveledUp = gainExperience(attacker, rule.killExperience, rule.maxLevel);
+    events.push({ type: "GAIN_EXPERIENCE", unitId: attacker.id, amount: rule.killExperience, leveledUp });
   } else {
-    gainExperience(attacker, rule.attackExperience, rule.maxLevel);
-    events.push({ type: "GAIN_EXPERIENCE", unitId: attacker.id, amount: rule.attackExperience });
+    const leveledUp = gainExperience(attacker, rule.attackExperience, rule.maxLevel);
+    events.push({ type: "GAIN_EXPERIENCE", unitId: attacker.id, amount: rule.attackExperience, leveledUp });
 
     if (canCounter(game, attacker, defender)) {
       counterDamage = getDamage({
@@ -418,11 +418,11 @@ export function resolveAttack(game, rule, attacker, defender) {
       if (attacker.currentHp <= 0) {
         destroyedUnitIds.push(attacker.id);
         events.push({ type: "UNIT_DESTROY", unitId: attacker.id, killedBy: defender.id });
-        gainExperience(defender, rule.killExperience, rule.maxLevel);
-        events.push({ type: "GAIN_EXPERIENCE", unitId: defender.id, amount: rule.killExperience });
+        const counterLeveledUp = gainExperience(defender, rule.killExperience, rule.maxLevel);
+        events.push({ type: "GAIN_EXPERIENCE", unitId: defender.id, amount: rule.killExperience, leveledUp: counterLeveledUp });
       } else {
-        gainExperience(defender, rule.counterExperience, rule.maxLevel);
-        events.push({ type: "GAIN_EXPERIENCE", unitId: defender.id, amount: rule.counterExperience });
+        const counterLeveledUp = gainExperience(defender, rule.counterExperience, rule.maxLevel);
+        events.push({ type: "GAIN_EXPERIENCE", unitId: defender.id, amount: rule.counterExperience, leveledUp: counterLeveledUp });
       }
     }
   }

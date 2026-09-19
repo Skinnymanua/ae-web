@@ -112,7 +112,16 @@ export function refreshUnits(scene) {
       delete scene.statusIconSprites[id];
     }
   }
-
+  // Same sweep for the level-up badge - without this, a unit that dies (or
+  // is otherwise removed from scene.game_.units) while carrying a badge
+  // leaves it sitting at its last tile forever, since the per-unit
+  // destroy-and-recreate below only runs for units still IN that array.
+  for (const [id, sprite] of Object.entries(scene.levelBadgeSprites)) {
+    if (!seenIds.has(id)) {
+      sprite.destroy();
+      delete scene.levelBadgeSprites[id];
+    }
+  }
   for (const unit of scene.game_.units) {
     const topLeftX = unit.x * TILE_SIZE;
     const topLeftY = unit.y * TILE_SIZE + BOARD_OFFSET_Y;
@@ -202,6 +211,29 @@ export function refreshUnits(scene) {
       iconSprite.setDisplaySize(STATUS_ICON_SIZE, STATUS_ICON_SIZE);
       iconSprite.setDepth(DEPTH.UNITS);
       scene.statusIconSprites[unit.id] = iconSprite;
+    }
+
+    scene.levelBadgeSprites[unit.id]?.destroy();
+    delete scene.levelBadgeSprites[unit.id];
+
+    // The level-up badge flagged (but not built) in the status-icon comment
+    // above - mirrored across from it (same Y, X measured from the tile's
+    // RIGHT edge instead of its left) rather than colliding with it. Ported
+    // from CanvasRenderer's getLevelTexture(unit.getLevel() - 1) - only
+    // drawn once a unit has actually leveled up at least once (level 0
+    // shows no badge at all, matching the source's own `if (level > 0)`
+    // gate), frame indexed by level-1 since level.png only has 3 frames for
+    // the 3 levels above base (units cap at level 3).
+    if (unit.level > 0) {
+      const levelBadge = scene.add.sprite(
+        topLeftX + TILE_SIZE - STATUS_ICON_SIZE / 2 - 2,
+        topLeftY + STATUS_ICON_SIZE / 2 + 2,
+        "level",
+        unit.level - 1
+      );
+      levelBadge.setDisplaySize(STATUS_ICON_SIZE, STATUS_ICON_SIZE);
+      levelBadge.setDepth(DEPTH.UNITS);
+      scene.levelBadgeSprites[unit.id] = levelBadge;
     }
   }
 }

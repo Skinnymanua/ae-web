@@ -1,6 +1,7 @@
 import { animateUnitMove, animateResurrection, refreshUnits } from "../render/units.js";
 import { animateHpChanges } from "../render/hpChange.js";
 import { animateAttackHit, playAttackHitSequence } from "../render/attackEffect.js";
+import { playLevelUpSequence } from "../render/levelUpEffect.js";
 import { runGameAction } from "../net/runGameAction.js";
 import { showActionBar, finishUnitAction, finishUnitActionOrCharge, clearActionBar } from "../ui/actionBar.js";
 import { showBuyMenu } from "../ui/dialogs.js";
@@ -271,7 +272,19 @@ async function confirmPendingAttack(scene, attacker, target) {
       return { targetUnitId: pos.id, x: pos.x, y: pos.y, damage: e.damage };
     })
     .filter(Boolean);
-  playAttackHitSequence(scene, hits, () => finishUnitActionOrCharge(scene, attacker));
+  // Chained AFTER the hit/counter sequence, matching the original's own
+  // animation queue order (onUnitGainExperience's submitUnitLevelUpAnimation
+  // fires from within onAttack, which itself runs after the attack's own
+  // submitUnitAttackAnimation was already queued - animations play in
+  // submission order there). Either or both of attacker/defender can have
+  // leveled up (an attack and its counter each grant their own XP - see
+  // combat-resolution.js's resolveAttack) - see levelUpEffect.js's own
+  // playLevelUpSequence for why these chain one after another rather than
+  // playing simultaneously.
+  const leveledUpIds = result.events.filter((e) => e.type === "GAIN_EXPERIENCE" && e.leveledUp).map((e) => e.unitId);
+  playAttackHitSequence(scene, hits, () => {
+    playLevelUpSequence(scene, leveledUpIds, () => finishUnitActionOrCharge(scene, attacker));
+  });
 }
 
 /** Same cursor preview as previewAttackTarget above, for a DESTROYER's
@@ -346,7 +359,14 @@ async function confirmPendingHeal(scene, healer, target) {
   const result = await runGameAction(scene, "heal", healer.id, target.id);
 
   const hpChanges = result.events.filter((e) => e.type === "HEAL").map((e) => hpChangeFromEvent(e, positionsById)).filter(Boolean);
-  animateHpChanges(scene, hpChanges, () => finishUnitActionOrCharge(scene, healer));
+  // Same chaining as confirmPendingAttack above - a heal only ever grants
+  // XP to the healer (see combat-resolution.js's resolveHeal), but
+  // playLevelUpSequence handles a single-id list the same as an empty or
+  // multi-id one.
+  const leveledUpIds = result.events.filter((e) => e.type === "GAIN_EXPERIENCE" && e.leveledUp).map((e) => e.unitId);
+  animateHpChanges(scene, hpChanges, () => {
+    playLevelUpSequence(scene, leveledUpIds, () => finishUnitActionOrCharge(scene, healer));
+  });
 }
 
 /** Same two-click preview/confirm shape as Heal above, for the Druid's
