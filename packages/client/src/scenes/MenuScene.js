@@ -33,12 +33,12 @@ const BG_MAX_SCALE = 1; // cap how far a big desktop window upscales it - stays 
  * MainMenu#initComponents.
  *
  * Shows the full button list from that reference for recognizability, but
- * only Skirmish and Multiplayer actually go anywhere - Campaign, Load Game,
- * Tools, and Account aren't built (see the project-wide gap summary: no
- * AI/campaign mode, no save/load, no account system), and Help doesn't have
- * any content to show yet either. Those five render visibly disabled
- * (dimmed, non-interactive) rather than as dead buttons that look like they
- * should do something - matching this project's general stance on not
+ * only Skirmish, Multiplayer, and Help actually go anywhere - Campaign,
+ * Load Game, Tools, and Account aren't built (see the project-wide gap
+ * summary: no AI/campaign mode, no save/load, no account system). Those
+ * four render visibly disabled (dimmed, non-interactive) rather than as
+ * dead buttons that look like they should do something - matching this
+ * project's general stance on not
  * shipping controls that don't work (see the turn-gating fix a few turns
  * back for the same principle applied to board interaction).
  *
@@ -96,7 +96,7 @@ export class MenuScene extends Phaser.Scene {
       { label: "Load Game", enabled: false, iconFrame: 5 },
       { label: "Tools", enabled: false, iconFrame: 3 },
       { label: "Account", enabled: false },
-      { label: "Help", enabled: false, iconFrame: 6 },
+      { label: "Help", enabled: true, target: "HelpScene", iconFrame: 6 },
     ];
 
     const panelWidth = Math.min(PANEL_WIDTH, width - 40);

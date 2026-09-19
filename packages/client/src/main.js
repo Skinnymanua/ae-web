@@ -7,6 +7,7 @@ import { CreateGameScene } from "./scenes/CreateGameScene.js";
 import { JoinGameScene } from "./scenes/JoinGameScene.js";
 import { NetworkLobbyScene } from "./scenes/NetworkLobbyScene.js";
 import { BoardScene } from "./scenes/BoardScene.js";
+import { HelpScene } from "./scenes/HelpScene.js";
 import { ReconnectScene } from "./scenes/ReconnectScene.js";
 import { MENU_WIDTH, MENU_HEIGHT, getMenuSize } from "./constants.js";
 
@@ -84,5 +85,6 @@ new Phaser.Game({
     JoinGameScene,
     NetworkLobbyScene,
     BoardScene,
+    HelpScene,
   ],
 });

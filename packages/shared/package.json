@@ -12,6 +12,10 @@
     "./data/unit-names.json": "./data/unit-names.json",
     "./data/unit-descriptions.json": "./data/unit-descriptions.json",
     "./data/tiles.json": "./data/tiles.json",
+    "./data/ability-names.json": "./data/ability-names.json",
+    "./data/ability-descriptions.json": "./data/ability-descriptions.json",
+    "./data/status-names.json": "./data/status-names.json",
+    "./data/status-descriptions.json": "./data/status-descriptions.json",
     "./src/*": "./src/*"
   }
 }

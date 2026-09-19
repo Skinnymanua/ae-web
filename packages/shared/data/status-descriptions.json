@@ -1,0 +1,6 @@
+{
+  "0": "Units who have been poisoned will lose 10 HP at turn start and cannot receive heal.",
+  "1": "For units who have been slowed, their movement points will be reduced to 1.",
+  "2": "For units who have been inspired, their gain 10 attack bonus.",
+  "3": "For units who have been blinded, their attack range will be reduced to 0."
+}
